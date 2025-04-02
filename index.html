@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.11<br/>
+        WebXR Solar System Explorer V0.12<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -152,34 +152,34 @@
             vrButton = VRButton.createButton(renderer);
             document.getElementById('vr-button-container').appendChild(vrButton);
 
-            // Controllers (Setup for movement ONLY, no models, no select events)
+            // Controllers (Setup for movement AND interaction events)
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart); // REMOVED
-            controller1.addEventListener('selectend', onSelectEnd); // REMOVED
+            controller1.addEventListener('selectstart', onSelectStart); // <-- RE-ENABLED
+            controller1.addEventListener('selectend', onSelectEnd);     // <-- RE-ENABLED
             userGroup.add(controller1);
 
             controller2 = renderer.xr.getController(1);
             userGroup.add(controller2);
 
             // --- REMOVED CONTROLLER MODELS ---
-            // --- REMOVED CONTROLLER LINE / RAYCASTER ---
-             
-             const controllerLineMat = new THREE.LineBasicMaterial({...});
-             const controllerLineGeom = new THREE.BufferGeometry()...;
-             controllerLine = new THREE.Line(...);
-             controller1.add(controllerLine);
-             raycaster = new THREE.Raycaster();
-            
+
+             // --- RE-ENABLED CONTROLLER LINE / RAYCASTER ---
+             const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
+             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]);
+             controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
+             controller1.add(controllerLine); // <-- RE-ENABLED
+
+             raycaster = new THREE.Raycaster(); // <-- RE-ENABLED
 
             // --- Lighting (Keep minimal) ---
             const ambientLight = new THREE.AmbientLight( 0xffffff, 1.5 );
             scene.add(ambientLight);
 
-            // --- REMOVED SOLAR SYSTEM CREATION CALL ---
-            createSolarSystem();
+            // --- RE-ENABLE SOLAR SYSTEM CREATION CALL ---
+            createSolarSystem(); // Keep uncommented
 
-            // --- REMOVED STARFIELD CREATION CALL ---
-            createStarfield();
+            // --- RE-ENABLE STARFIELD CREATION CALL ---
+            createStarfield(); // Keep uncommented
 
             // --- REMOVED UI PANEL OBJECT CREATION ---
             /*
@@ -190,7 +190,7 @@
             */
 
             window.addEventListener('resize', onWindowResize, false); // Keep resize
-        }
+        }    
         
         function createSolarSystem() {
             solarSystemData.forEach(data => {
@@ -389,46 +389,49 @@
             renderer.setAnimationLoop(() => {
                 const delta = clock.getDelta(); // Keep for movement and animation
 
-                // --- RE-ENABLED PLANET ORBIT LOOP ---
-                // Check if planetObjects exists and has elements before looping
+                // --- Planet Orbit Loop (Keep) ---
                 if (window.planetObjects && planetObjects.length > 0) {
                     planetObjects.forEach(obj => {
-                        // Orbiting: Rotate the group the planet is in
+                        // Orbiting
                         if (obj.orbitGroup) {
-                            obj.orbitGroup.rotation.y += obj.speed * delta * 5; // Adjust speed multiplier if needed
+                            obj.orbitGroup.rotation.y += obj.speed * delta * 5;
                         }
-                        // Self-rotation: Rotate the planet mesh itself
-                        obj.mesh.rotation.y += 0.1 * delta; // Adjust rotation speed if needed
+                        // Self-rotation
+                        obj.mesh.rotation.y += 0.1 * delta;
                     });
                  }
 
-                 // Handle VR Controller Input for Movement (Keep basic movement)
+                 // Handle VR Controller Input for Movement & Interactions
                  if (renderer.xr.isPresenting) {
+                     // Gamepad Update & Movement Logic (Keep)
                      const session = renderer.xr.getSession();
                      if (session && session.inputSources) {
-                          let primaryController = null; // Find the controller with gamepad first for movement
+                          let primaryController = null;
                           session.inputSources.forEach((source, index) => {
                               const targetController = (index === 0) ? controller1 : controller2;
                               if (targetController) {
                                   targetController.userData.gamepad = source.gamepad || null;
-                                  if (source.gamepad && !primaryController) primaryController = targetController; // Assign first controller with gamepad
+                                  if (source.gamepad && !primaryController) primaryController = targetController;
                               }
                           });
-                           // Use primary (gamepad) controller for movement, default to controller2 if needed
                            const moveController = primaryController || controller2;
-                           if (moveController) handleControllerInput(moveController, delta); // Keep movement call
+                           if (moveController) handleControllerInput(moveController, delta);
                      }
 
-                     // --- REMOVED INTERACTION UPDATES ---
-                     updateInteractions(); // Keep commented out
+                     // --- RE-ENABLED INTERACTION UPDATES ---
+                     updateInteractions(); // <-- RE-ENABLED THIS CALL
 
                      // --- REMOVED UI PANEL POSITIONING ---
-                     /*
-                     if (selectedPlanet && infoPanelDiv.style.display === 'block') {
-                         // ... panel positioning ... // Keep commented out
-                     }
-                     */
+                     // ... (UI positioning remains commented out) ...
                  }
+
+                // Render Scene (Keep)
+                renderer.render(scene, camera);
+
+                // --- REMOVED CSS2D RENDER CALL ---
+                // css2DRenderer.render(scene, camera); // Keep commented out
+            });
+        }
 
                 // Render Scene (Keep)
                 renderer.render(scene, camera);
