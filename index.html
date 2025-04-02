@@ -41,7 +41,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.19<br/>
+        WebXR Solar System Explorer V0.20<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -266,52 +266,90 @@
 
         // --- REMOVED updateInteractions function ---
 
-        function onCycleNextPlanet() {
-            if (selectablePlanetMeshes.length === 0) return; // No planets to cycle through
+        function onCycleNextPlanet(event) { // Add event parameter for potential debugging later
+            console.log("--- onCycleNextPlanet Fired! ---"); // Log that the function was called
+
+            // Log the source of the event if possible (which controller)
+            if (event && event.target) {
+                console.log("Event target:", event.target === controller1 ? "Controller 1" : "Other");
+            }
+
+            // Check if the array of selectable planets is populated
+            console.log("Selectable Planet Meshes Count:", selectablePlanetMeshes.length);
+            if (selectablePlanetMeshes.length === 0) {
+                console.error("No selectable planets found in the array!");
+                return; // Stop if no planets
+            }
 
             // Optional: Reset scale/color of previously selected planet
             if (selectedPlanetObject) {
+                 console.log("Resetting previous selection:", selectedPlanetObject.name);
                 // Example: Reset scale if you changed it
                 // selectedPlanetObject.scale.set(1, 1, 1);
             }
 
             // Increment index and wrap around
             currentPlanetIndex = (currentPlanetIndex + 1) % selectablePlanetMeshes.length;
+            console.log("New Planet Index:", currentPlanetIndex);
 
             // Get the newly selected planet mesh and its data
             selectedPlanetObject = selectablePlanetMeshes[currentPlanetIndex];
+            if (!selectedPlanetObject || !selectedPlanetObject.userData) {
+                console.error("Could not get valid planet object or user data at index:", currentPlanetIndex);
+                return; // Stop if something is wrong
+            }
             const data = selectedPlanetObject.userData;
+            console.log("Cycled to Planet:", data.name);
+            console.log("Planet Data:", data);
 
-            console.log("Cycled to:", data.name);
 
             // Optional: Apply visual effect to newly selected planet
             // Example: Slightly increase scale
             // selectedPlanetObject.scale.set(1.1, 1.1, 1.1);
 
 
-            // Update the HTML panel content
-            document.getElementById('panelTitle').textContent = data.name;
-            document.getElementById('panelFact1').textContent = data.facts[0] || '';
-            document.getElementById('panelFact2').textContent = data.facts[1] || '';
-            document.getElementById('panelFact3').textContent = data.facts[2] || '';
+            // Update the HTML panel content - Check if elements exist first
+            const panelTitleEl = document.getElementById('panelTitle');
+            const panelFact1El = document.getElementById('panelFact1');
+            const panelFact2El = document.getElementById('panelFact2');
+            const panelFact3El = document.getElementById('panelFact3');
+
+            if (panelTitleEl && panelFact1El && panelFact2El && panelFact3El) {
+                console.log("Updating panel elements...");
+                panelTitleEl.textContent = data.name;
+                panelFact1El.textContent = data.facts[0] || '';
+                panelFact2El.textContent = data.facts[1] || '';
+                panelFact3El.textContent = data.facts[2] || '';
+            } else {
+                console.error("One or more panel elements not found in the DOM!");
+            }
+
 
             // Make the panel visible
-            if (infoPanelDiv) { // Check if div exists
+            if (infoPanelDiv) { // Check if div reference exists
+                 console.log("Setting info panel display to block");
                  infoPanelDiv.style.display = 'block';
+            } else {
+                console.error("infoPanelDiv reference is missing!");
             }
+            console.log("--- onCycleNextPlanet Finished ---");
         } // End of onCycleNextPlanet
-
-        // --- REMOVED onSelectEnd function (or keep empty if needed) ---
-
         function animate() {
             renderer.setAnimationLoop(() => {
                 const delta = clock.getDelta();
 
-                // Planet Orbit Loop (Keep)
+                // --- Planet Orbit Loop (Keep + Logging) ---
                 if (window.planetObjects && planetObjects.length > 0) {
+                    // console.log("Updating orbits..."); // Uncomment this if you suspect the whole loop isn't running
                     planetObjects.forEach(obj => {
-                        if (obj.orbitGroup) { obj.orbitGroup.rotation.y += obj.speed * delta * 5; }
-                        obj.mesh.rotation.y += 0.1 * delta;
+                        if (obj.orbitGroup) {
+                            obj.orbitGroup.rotation.y += obj.speed * delta * 5;
+                        }
+                        // Check if mesh exists before rotating
+                        if (obj.mesh) {
+                             // console.log("Rotating:", obj.mesh.name); // Uncomment for verbose logging
+                             obj.mesh.rotation.y += 0.1 * delta;
+                        }
                     });
                  }
 
@@ -324,6 +362,8 @@
                               const targetController = (index === 0) ? controller1 : controller2;
                               if (targetController) {
                                   targetController.userData.gamepad = source.gamepad || null;
+                                  // Add log to check if controller1 is being assigned
+                                  // if (index === 0 && targetController) console.log("Controller 1 found:", targetController);
                                   if (source.gamepad && !primaryController) primaryController = targetController;
                               }
                           });
