@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.8<br/>
+        WebXR Solar System Explorer V0.9<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -179,7 +179,7 @@
             // createSolarSystem();
 
             // --- REMOVED STARFIELD CREATION CALL ---
-            // createStarfield();
+            createStarfield();
 
             // --- REMOVED UI PANEL OBJECT CREATION ---
             /*
@@ -270,7 +270,7 @@
         }
         function createStarfield() {
             // --- OPTIMIZATION: Reduce Star Count ---
-            const numStars = 500; // Reduced from 10000
+            const numStars = 5000; // Reduced from 10000
             const starRadius = 500;
 
             const starVertices = [];
