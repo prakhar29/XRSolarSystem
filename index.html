@@ -9,18 +9,57 @@
         #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; display:block; padding: 5px; background-color: rgba(0,0,0,0.5); }
         a { color: #0af }
         #vr-button-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 101; }
-        /* Basic VR Button Styling (VRButton.js will add its own button) */
+        /* Basic VR Button Styling */
          #VRButton { background-color: #2a2; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; }
          #VRButton:hover { background-color: #3b3; }
          #VRButton:disabled { background-color: #555; cursor: not-allowed; }
+
+         /* Styling for the 2D Info Panel */
+         #infoPanel {
+            position: absolute; /* Needed for CSS2DRenderer */
+            background-color: rgba(0, 20, 40, 0.85);
+            border: 1px solid #0af;
+            border-radius: 10px;
+            padding: 15px;
+            color: white;
+            width: 250px; /* Adjust width as needed */
+            font-size: 14px;
+            text-align: left;
+            /* Initially hidden */
+            display: none;
+            /* Pointer events none so it doesn't block raycasting when visible */
+            pointer-events: none;
+         }
+         #infoPanel h3 { margin-top: 0; color: #0af; }
+         #infoPanel p { margin-bottom: 5px; }
+         #infoPanel .close-button { /* Basic styling for a potential close button if needed */
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #aaa;
+         }
+         #infoPanel .close-button:hover { color: #fff; }
+
     </style>
 </head>
 <body>
     <div id="info">
         WebXR Solar System Explorer<br/>
-        Look around with your headset. Use the primary controller's thumbstick/touchpad (usually right) to move forward/backward.
+        Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
+
+     <!-- Div for the 2D Info Panel -->
+     <div id="infoPanel">
+        <span id="closeInfoPanel" class="close-button" style="display: none;">[X]</span> <!-- Example close button, functionality not fully added -->
+        <h3 id="panelTitle">Planet Name</h3>
+        <p id="panelFact1">Fact 1</p>
+        <p id="panelFact2">Fact 2</p>
+        <p id="panelFact3">Fact 3</p>
+     </div>
+
 
     <!-- Import Map for Three.js using jsdelivr -->
     <script type="importmap">
@@ -35,98 +74,115 @@
     <script type="module">
         import * as THREE from 'three';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Optional, for visualizing controllers
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'; // Import CSS2D
 
         // --- Basic Setup ---
         let scene, camera, renderer, clock;
         let vrButton;
-        let userGroup; // Group to move the user (camera + controllers)
-        let controller1, controller2; // XR Controllers
-        const movementSpeed = 2.0; // Units per second for smooth locomotion
+        let userGroup;
+        let controller1, controller2, controllerGrip1, controllerGrip2;
+        let controllerLine; // Reference to the line on controller1
+        const movementSpeed = 2.0;
+
+        // --- Interaction ---
+        let raycaster;
+        let intersectedObject = null; // Track the currently pointed-at planet
+        const highlightColor = new THREE.Color(0x00ff00); // Green highlight
+        const defaultLineColor = new THREE.Color(0xffffff); // White default
+
+        // --- 2D UI ---
+        let css2DRenderer;
+        let infoPanelDiv;
+        let infoPanelObject;
+        let selectedPlanet = null; // Track the currently selected planet for UI
 
         // --- Solar System Data ---
-        // NOTE: Scales and distances are NOT astrophysically accurate but adjusted for visualization.
-        // Distances are roughly logarithmic. Sizes are also scaled non-linearly.
-        // Textures from a simple source - consider hosting your own!
-        const textureLoader = new THREE.TextureLoader();
+        // Added color and basic facts. Removed texture URLs.
         const solarSystemData = [
-            { name: 'Sun', radius: 5, distance: 0, speed: 0, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/sun.jpg', emissive: 0xffff00 },
-            { name: 'Mercury', radius: 0.5, distance: 15, speed: 0.047, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/mercury.jpg' },
-            { name: 'Venus', radius: 0.9, distance: 22, speed: 0.035, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/venus_surface.jpg' },
-            { name: 'Earth', radius: 1, distance: 30, speed: 0.029, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg' },
-            { name: 'Mars', radius: 0.7, distance: 40, speed: 0.024, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/mars.jpg' },
-            { name: 'Jupiter', radius: 3.5, distance: 65, speed: 0.013, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/jupiter.jpg' },
-            { name: 'Saturn', radius: 3, distance: 90, speed: 0.009, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/saturn.jpg' }, // Ring added separately
-            { name: 'Uranus', radius: 2, distance: 115, speed: 0.006, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/uranus.jpg' },
-            { name: 'Neptune', radius: 1.9, distance: 140, speed: 0.005, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/neptune.jpg' }
+            { name: 'Sun', radius: 5, distance: 0, speed: 0, color: 0xffd700, emissive: 0xffd700, facts: ["Star", "Center of Solar System", "Surface Temp: ~5,500 °C"] },
+            { name: 'Mercury', radius: 0.5, distance: 15, speed: 0.047, color: 0xaaaaaa, facts: ["Smallest Planet", "Shortest Orbit (88 days)", "Extreme Temperatures"] },
+            { name: 'Venus', radius: 0.9, distance: 22, speed: 0.035, color: 0xffe4b5, facts: ["Hottest Planet", "Thick CO2 Atmosphere", "Rotates Backwards"] },
+            { name: 'Earth', radius: 1, distance: 30, speed: 0.029, color: 0x4682b4, facts: ["Our Home", "Only Known Life", "Liquid Water Surface"] },
+            { name: 'Mars', radius: 0.7, distance: 40, speed: 0.024, color: 0xff4500, facts: ["The Red Planet", "Olympus Mons (Volcano)", "Thin Atmosphere"] },
+            { name: 'Jupiter', radius: 3.5, distance: 65, speed: 0.013, color: 0xffa500, facts: ["Largest Planet", "Great Red Spot (Storm)", "Gas Giant"] },
+            { name: 'Saturn', radius: 3, distance: 90, speed: 0.009, color: 0xf4a460, facts: ["Ringed Planet", "Least Dense Planet", "Gas Giant"] }, // Ring added separately
+            { name: 'Uranus', radius: 2, distance: 115, speed: 0.006, color: 0xadd8e6, facts: ["Ice Giant", "Tilted Axis", "Faint Rings"] },
+            { name: 'Neptune', radius: 1.9, distance: 140, speed: 0.005, color: 0x00008b, facts: ["Ice Giant", "Strongest Winds", "Great Dark Spot (Variable)"] }
         ];
 
-        const planetObjects = []; // To store planet mesh and orbit group
+        const planetObjects = []; // Stores { mesh, orbitGroup, speed, distance, data }
+        const selectablePlanets = []; // Stores just the planet meshes for raycasting
 
         init();
         animate();
 
         function init() {
-            // Scene
             scene = new THREE.Scene();
             clock = new THREE.Clock();
 
-            // Camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-             // Position user slightly above the ecliptic plane
-            camera.position.set(0, 10, 50);
-            camera.lookAt(0, 0, 0);
 
-            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // User Group for Movement
+            // --- 2D Renderer Setup ---
+            css2DRenderer = new CSS2DRenderer();
+            css2DRenderer.setSize(window.innerWidth, window.innerHeight);
+            css2DRenderer.domElement.style.position = 'absolute';
+            css2DRenderer.domElement.style.top = '0px';
+            css2DRenderer.domElement.style.pointerEvents = 'none'; // Don't let it block canvas events
+            document.body.appendChild(css2DRenderer.domElement);
+
+            // User Group
             userGroup = new THREE.Group();
-            userGroup.position.set(0, 5, 45); // Initial position slightly away from the sun
-            userGroup.add(camera); // Add camera to the group
+            userGroup.position.set(0, 5, 45);
+            userGroup.add(camera);
             scene.add(userGroup);
 
             // VR Button
             vrButton = VRButton.createButton(renderer);
             document.getElementById('vr-button-container').appendChild(vrButton);
 
-            // Controllers
+            // Controllers & Models
             controller1 = renderer.xr.getController(0);
-            userGroup.add(controller1); // Add controllers to the user group as well
+            controller1.addEventListener('selectstart', onSelectStart); // Event listener for trigger press
+            controller1.addEventListener('selectend', onSelectEnd); // Optional: could hide panel on release
+            userGroup.add(controller1);
 
             controller2 = renderer.xr.getController(1);
             userGroup.add(controller2);
 
-            // Optional: Controller Models (visual representation)
             const controllerModelFactory = new XRControllerModelFactory();
-            const controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrip1 = renderer.xr.getControllerGrip(0);
             controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
             userGroup.add(controllerGrip1);
 
-            const controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerGrip2 = renderer.xr.getControllerGrip(1);
             controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
             userGroup.add(controllerGrip2);
 
-             // Add line for controller 1 pointing direction (optional visualization)
-             const controllerLineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1) ]); // Line points forward
-             const controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
-             controllerLine.scale.z = 5; // Make line visible
-             controller1.add(controllerLine.clone()); // Add a line to the controller itself
-             // controller2.add(controllerLine.clone()); // If needed for second controller
+             // Controller Line for Pointing/Raycasting
+             const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
+             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]); // Line points forward, make it longer
+             controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
+             // controllerLine.scale.z = 10; // Scale removed, adjusted geometry instead
+             controller1.add(controllerLine); // Add line to the controller
 
+             // Raycaster
+             raycaster = new THREE.Raycaster();
 
             // Lighting
-            const ambientLight = new THREE.AmbientLight(0x404040, 1); // Soft white light
+            // Increased Ambient Light intensity for better visibility without textures
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Brighter ambient light
             scene.add(ambientLight);
 
-            const sunLight = new THREE.PointLight(0xffffff, 4, 1000); // Stronger light from sun position
-            // No need to add sunLight to scene if Sun mesh uses MeshBasicMaterial
-            // scene.add(sunLight); // Add only if Sun is MeshStandardMaterial
+            // Add Point Light at the Sun's position
+            const sunLight = new THREE.PointLight(0xffffff, 3, 2000); // Intensity 3, range 2000
+            scene.add(sunLight); // Sun itself is basic material, but light affects planets
 
             // --- Create Solar System ---
             createSolarSystem();
@@ -134,172 +190,235 @@
             // --- Create Starfield ---
             createStarfield();
 
-            // Window Resize Handler
+            // --- Create UI Panel Object ---
+            infoPanelDiv = document.getElementById('infoPanel');
+            infoPanelObject = new CSS2DObject(infoPanelDiv);
+            infoPanelObject.position.set(0, 0, 0); // Initial position, will be moved
+            // Add to scene initially, or add it when needed. Adding here is fine.
+            scene.add(infoPanelObject); // Make sure it's added to the main scene, not user group
+
+
             window.addEventListener('resize', onWindowResize, false);
         }
 
         function createSolarSystem() {
             solarSystemData.forEach(data => {
                 const isSun = data.name === 'Sun';
-
-                // Geometry
                 const geometry = new THREE.SphereGeometry(data.radius, 32, 16);
 
-                // Material
                 let material;
                 if (isSun) {
                     material = new THREE.MeshBasicMaterial({
-                        map: textureLoader.load(data.texture),
-                        emissive: data.emissive, // Make it glow
-                        emissiveIntensity: 1.5,
-                        emissiveMap: textureLoader.load(data.texture) // Use texture for emission color
+                        color: data.color,
+                        // emissive: data.emissive, // Basic already glows with color
+                        // emissiveIntensity: 1.5
                     });
                 } else {
                     material = new THREE.MeshStandardMaterial({
-                        map: textureLoader.load(data.texture),
-                        roughness: 0.9,
+                        color: data.color,
+                        roughness: 0.8,
                         metalness: 0.1
                     });
                 }
 
-                // Mesh
                 const mesh = new THREE.Mesh(geometry, material);
-                mesh.name = data.name; // For potential interaction later
+                mesh.name = data.name; // Important for identification
+                mesh.userData = data; // Store all data (including facts) on the mesh
 
-                // Orbit Group (for planets)
                 let orbitGroup = null;
                 if (!isSun) {
                     orbitGroup = new THREE.Group();
-                    scene.add(orbitGroup); // Orbit groups are centered at the sun (origin)
-
-                    mesh.position.x = data.distance; // Position planet relative to orbit group center
+                    scene.add(orbitGroup);
+                    mesh.position.x = data.distance;
                     orbitGroup.add(mesh);
 
-                     // --- Create Orbit Path Visualization ---
-                     const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 128);
-                     // Rotate ring to be flat on XZ plane
-                     orbitPathGeometry.rotateX(-Math.PI / 2);
-                     const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.2, transparent: true, side: THREE.DoubleSide });
-                     const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
-                     scene.add(orbitPathMesh); // Add orbit path directly to scene, centered at origin
+                    // Keep orbit path visualization
+                    const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 128);
+                    orbitPathGeometry.rotateX(-Math.PI / 2);
+                    const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
+                    const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
+                    scene.add(orbitPathMesh);
+
+                    // Add planet mesh to the list for raycasting
+                    selectablePlanets.push(mesh);
+
                 } else {
-                    scene.add(mesh); // Add sun directly to scene
+                    scene.add(mesh); // Add sun directly
+                    // Don't add Sun to selectablePlanets
                 }
 
-                // Store for animation
                 planetObjects.push({
                     mesh: mesh,
-                    orbitGroup: orbitGroup, // null for Sun
+                    orbitGroup: orbitGroup,
                     speed: data.speed,
-                    distance: data.distance // Store original distance if needed
+                    distance: data.distance,
+                    data: data // Store data reference here too if needed elsewhere
                 });
 
-                // Special case: Saturn's Rings
+                // Special case: Saturn's Rings (using solid color)
                 if (data.name === 'Saturn') {
-                    const ringTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/saturn_ring.png');
-                    ringTexture.rotation = Math.PI / 2; // Align texture if needed
                     const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 64);
-                     // Rotate ring to be flat relative to planet
-                     ringGeometry.rotateX(Math.PI * 0.45); // Tilt rings slightly like Saturn
-                     ringGeometry.rotateY(Math.PI * 0.1);
-                    const ringMaterial = new THREE.MeshBasicMaterial({
-                        map: ringTexture,
+                    ringGeometry.rotateX(Math.PI * 0.45);
+                    ringGeometry.rotateY(Math.PI * 0.1);
+                    const ringMaterial = new THREE.MeshBasicMaterial({ // Changed to Basic for solid color
+                        color: 0xcccccc, // Light grey color for rings
                         side: THREE.DoubleSide,
                         transparent: true,
-                        opacity: 0.9
+                        opacity: 0.6
                      });
                     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
-                    mesh.add(ringMesh); // Add rings as a child of Saturn's mesh
+                    mesh.add(ringMesh);
                 }
             });
         }
 
         function createStarfield() {
-            const starGeometry = new THREE.SphereGeometry(500, 64, 32); // Large sphere
-            const starMaterial = new THREE.MeshBasicMaterial({
-                map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/starfield.jpg'), // Simple star texture
-                side: THREE.BackSide // Render material on the inside
-            });
-            const starField = new THREE.Mesh(starGeometry, starMaterial);
-            scene.add(starField);
+            const starTextureUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/starfield.jpg'; // Example texture
+             try {
+                 const starTexture = new THREE.TextureLoader().load(starTextureUrl);
+                 const starGeometry = new THREE.SphereGeometry(500, 64, 32);
+                 const starMaterial = new THREE.MeshBasicMaterial({
+                     map: starTexture,
+                     side: THREE.BackSide, // Render material on the inside
+                     fog: false // Ensure stars aren't affected by scene fog if added later
+                 });
+                 const starField = new THREE.Mesh(starGeometry, starMaterial);
+                 scene.add(starField);
+             } catch (error) {
+                 console.error("Failed to load starfield texture:", error);
+                 // Optional: Add a fallback solid color background?
+                 // scene.background = new THREE.Color(0x050510);
+             }
         }
 
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            css2DRenderer.setSize(window.innerWidth, window.innerHeight); // Resize CSS2D renderer too
         }
 
         function handleControllerInput(controller, delta) {
-            if (controller.userData.gamepad) { // Check if gamepad data is available
+            if (controller.userData.gamepad) {
                 const gamepad = controller.userData.gamepad;
-
-                // Simple Thumbstick/Touchpad Forward/Backward Movement (usually axes 2 & 3)
                 if (gamepad.axes.length >= 4) {
-                    const moveZ = gamepad.axes[3]; // Typically vertical axis on right thumbstick/touchpad
-
-                    if (Math.abs(moveZ) > 0.1) { // Deadzone check
-                        const moveDirection = new THREE.Vector3(0, 0, -1); // Base direction (forward)
-                        // Transform direction by controller's orientation
+                    const moveZ = gamepad.axes[3];
+                    if (Math.abs(moveZ) > 0.1) {
+                        const moveDirection = new THREE.Vector3(0, 0, -1);
                         moveDirection.applyQuaternion(controller.quaternion);
-                        // Optional: Project onto XZ plane if you don't want vertical movement
-                        // moveDirection.y = 0;
+                        // moveDirection.y = 0; // Optional: Prevent vertical movement
                         // moveDirection.normalize();
-
                         userGroup.position.addScaledVector(moveDirection, -moveZ * movementSpeed * delta);
                     }
-                    // Could add turning with horizontal axis (e.g., gamepad.axes[2]) here if desired
                 }
             }
         }
 
+        function updateInteractions() {
+            intersectedObject = null; // Reset intersection
+            if (renderer.xr.isPresenting && controller1) {
+                // Use controller's matrix world for raycasting
+                const controllerMatrix = controller1.matrixWorld;
+                const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerMatrix.getPosition(new THREE.Vector3()));
+
+                raycaster.set(controllerMatrix.getPosition(new THREE.Vector3()), rayDirection.normalize());
+
+                const intersects = raycaster.intersectObjects(selectablePlanets, false); // Intersect only planet meshes
+
+                if (intersects.length > 0) {
+                    // Check if the intersection is different from the last frame
+                    if (intersectedObject !== intersects[0].object) {
+                       intersectedObject = intersects[0].object;
+                    }
+                     // Highlight: Change controller line color
+                    controllerLine.material.color.set(highlightColor);
+
+                } else {
+                     // No intersection: Reset line color
+                     controllerLine.material.color.set(defaultLineColor);
+                }
+            } else {
+                 // Not presenting or no controller, reset line color
+                 if(controllerLine) controllerLine.material.color.set(defaultLineColor);
+            }
+        }
+
+
+        function onSelectStart() {
+             // Triggered by controller button press
+             if (intersectedObject) {
+                 selectedPlanet = intersectedObject; // Mark this planet as selected
+                 const data = selectedPlanet.userData; // Get the data stored on the mesh
+
+                 // Update the HTML panel content
+                 document.getElementById('panelTitle').textContent = data.name;
+                 document.getElementById('panelFact1').textContent = data.facts[0] || '';
+                 document.getElementById('panelFact2').textContent = data.facts[1] || '';
+                 document.getElementById('panelFact3').textContent = data.facts[2] || '';
+
+                 // Position the panel slightly above the selected planet
+                 const planetPosition = selectedPlanet.getWorldPosition(new THREE.Vector3());
+                 const offset = new THREE.Vector3(0, selectedPlanet.geometry.parameters.radius + 1.5, 0); // Offset Y based on planet radius + margin
+                 infoPanelObject.position.copy(planetPosition).add(offset);
+
+                 // Make the panel visible
+                 infoPanelDiv.style.display = 'block';
+             } else {
+                 // Clicked in empty space, hide the panel
+                 selectedPlanet = null;
+                 infoPanelDiv.style.display = 'none';
+             }
+         }
+
+         function onSelectEnd() {
+            // Optional: Hide panel on trigger release? Or keep it until another selection?
+            // For now, we'll leave it visible until another selection or empty space click.
+         }
 
         function animate() {
             renderer.setAnimationLoop(() => {
-                const delta = clock.getDelta(); // Time since last frame
+                const delta = clock.getDelta();
 
-                // --- Update Planet Orbits ---
+                // Update Planet Orbits
                 planetObjects.forEach(obj => {
-                    if (obj.orbitGroup) { // Only rotate if it has an orbit group (i.e., not the Sun)
-                        obj.orbitGroup.rotation.y += obj.speed * delta * 5; // Adjust multiplier for visual speed
+                    if (obj.orbitGroup) {
+                        obj.orbitGroup.rotation.y += obj.speed * delta * 5;
                     }
-                    // Optional: Add self-rotation
-                    obj.mesh.rotation.y += 0.1 * delta; // All planets rotate at same slow speed for simplicity
+                    obj.mesh.rotation.y += 0.1 * delta;
                 });
 
-
-                 // --- Handle VR Controller Input for Movement ---
+                 // Handle VR Controller Input for Movement & Interactions
                  if (renderer.xr.isPresenting) {
-                     // Check which controller is primary (often the right one, index 0 or 1)
-                     // We'll assume controller1 (index 0) is the primary for movement for simplicity
-                     // A more robust solution might check handedness or allow user selection.
-                     const primaryController = controller1; // Adjust if needed (e.g., check handedness)
-
-                     // Check if controller is connected and has gamepad data
-                     if (primaryController && primaryController.userData.gamepad) {
-                          handleControllerInput(primaryController, delta);
-                     } else if (controller2 && controller2.userData.gamepad) {
-                         // Fallback to controller 2 if 1 doesn't have gamepad data (less common)
-                         handleControllerInput(controller2, delta);
-                     }
-
-                     // Update controller connection status and gamepad data (important!)
                      const session = renderer.xr.getSession();
                      if (session && session.inputSources) {
-                         session.inputSources.forEach((source, index) => {
-                             const targetController = (index === 0) ? controller1 : controller2;
-                             if (targetController && source.gamepad) {
-                                 targetController.userData.gamepad = source.gamepad; // Update gamepad reference
-                             } else if (targetController) {
-                                 targetController.userData.gamepad = null; // Clear if no gamepad
-                             }
-                         });
+                          let primaryController = null; // Find the controller with gamepad first for movement
+                          session.inputSources.forEach((source, index) => {
+                              const targetController = (index === 0) ? controller1 : controller2;
+                              if (targetController) {
+                                  targetController.userData.gamepad = source.gamepad || null;
+                                  if (source.gamepad && !primaryController) primaryController = targetController; // Assign first controller with gamepad
+                              }
+                          });
+                           // Use primary (gamepad) controller for movement, default to controller2 if needed
+                           const moveController = primaryController || controller2;
+                           if (moveController) handleControllerInput(moveController, delta);
                      }
-                 }
+                     // Handle pointing and selection with controller1 specifically
+                     updateInteractions();
 
+                     // Make the info panel always face the camera if visible
+                     if (selectedPlanet && infoPanelDiv.style.display === 'block') {
+                         // Optional: Keep panel facing user. CSS2DObject does this reasonably well by default.
+                         // You could force it more strictly if needed:
+                         // infoPanelObject.lookAt(camera.getWorldPosition(new THREE.Vector3()));
+                     }
+
+                 }
 
                 // Render Scene
                 renderer.render(scene, camera);
+                // Render CSS2D Overlay
+                css2DRenderer.render(scene, camera);
             });
         }
 
