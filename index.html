@@ -41,7 +41,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.16<br/>
+        WebXR Solar System Explorer V0.17<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -278,36 +278,35 @@
             }
         } // End of handleControllerInput
 
-    function updateInteractions() {
-        intersectedObject = null; // Reset intersection (doesn't matter now but keep for structure)
+        function updateInteractions() {
+            intersectedObject = null; // Reset intersection
 
-        // Check controller1 exists before using it
-        if (renderer.xr.isPresenting && controller1 && controllerLine) {
-            // --- Keep Raycaster Setup ---
-            const controllerMatrix = controller1.matrixWorld;
-            const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerMatrix.getPosition(new THREE.Vector3()));
-            raycaster.set(controllerMatrix.getPosition(new THREE.Vector3()), rayDirection.normalize());
+            // Ensure controller, line, and raycaster are ready before proceeding
+            if (renderer.xr.isPresenting && controller1 && controllerLine && raycaster) {
+                const controllerMatrix = controller1.matrixWorld;
+                // It's slightly more optimal to reuse vectors if you create them outside the loop,
+                // but for this scale, creating them here is likely fine.
+                const controllerPosition = controllerMatrix.getPosition(new THREE.Vector3());
+                const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerPosition).normalize();
 
-            // --- TEMPORARILY DISABLE INTERSECTION TEST ---
-            /*
-            const intersects = raycaster.intersectObjects(selectablePlanets, false);
+                raycaster.set(controllerPosition, rayDirection);
 
-            if (intersects.length > 0) {
-                intersectedObject = intersects[0].object;
-                controllerLine.material.color.set(highlightColor);
-            } else {
+                // --- RE-ENABLE INTERSECTION TEST ---
+                const intersects = raycaster.intersectObjects(selectablePlanets, false);
+
+                if (intersects.length > 0) {
+                    // Found intersection
+                    intersectedObject = intersects[0].object;
+                    controllerLine.material.color.set(highlightColor);
+                } else {
+                    // No intersection
+                     controllerLine.material.color.set(defaultLineColor);
+                }
+            } else if (controllerLine) {
+                 // Ensure line color is default if not in VR or controller isn't ready
                  controllerLine.material.color.set(defaultLineColor);
             }
-            */
-
-            // Force line color to default for this test
-            controllerLine.material.color.set(defaultLineColor);
-
-
-        } else if (controllerLine) { // Reset color if not presenting or no controller
-             controllerLine.material.color.set(defaultLineColor);
-        }
-    } // End of updateInteractions
+        } // End of updateInteractions
 
         function onSelectStart() {
              // Triggered by controller button press
@@ -327,6 +326,10 @@
             // Optional: Could add logic here if needed on release
             // console.log("Select end");
          } // End of onSelectEnd
+
+                // --- Throttling Setup ---
+        let interactionFrameCounter = 0;
+        const interactionCheckInterval = 3; // Check interactions every 3 frames (Adjust if needed)
 
         function animate() {
             renderer.setAnimationLoop(() => { // Arrow function for loop starts
@@ -366,22 +369,29 @@
                            } // End if moveController
                      } // End if session and inputSources
 
-                     // --- RE-ENABLED INTERACTION UPDATES ---
-                     // updateInteractions(); // <-- RE-ENABLED THIS CALL
+                     // --- Throttled Interaction Updates ---
+                     interactionFrameCounter++;
+                     if (interactionFrameCounter % interactionCheckInterval === 0) {
+                         updateInteractions(); // Call less frequently
+                     }
 
                      // --- REMOVED UI PANEL POSITIONING ---
                      /*
                      if (selectedPlanet && infoPanelDiv.style.display === 'block') {
-                         // ... panel positioning ... // Keep commented out
+                         // ... panel positioning ... // Keep commented out for now
                      }
                      */
+                 } else {
+                     // Optional: When not in VR, maybe check every frame or reset counter
+                     interactionFrameCounter = 0; // Reset counter when exiting VR
+                     // updateInteractions(); // Uncomment if you want desktop interaction highlighting
                  } // End if isPresenting
 
                 // Render Scene (Keep)
                 renderer.render(scene, camera);
 
                 // --- REMOVED CSS2D RENDER CALL ---
-                // css2DRenderer.render(scene, camera); // Keep commented out
+                // css2DRenderer.render(scene, camera); // Keep commented out for now
             }); // End of setAnimationLoop callback
         } // End of animate function
 
