@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.9<br/>
+        WebXR Solar System Explorer V0.10<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -176,7 +176,7 @@
             scene.add(ambientLight);
 
             // --- REMOVED SOLAR SYSTEM CREATION CALL ---
-            // createSolarSystem();
+            createSolarSystem();
 
             // --- REMOVED STARFIELD CREATION CALL ---
             createStarfield();
@@ -385,40 +385,47 @@
             // For now, we'll leave it visible until another selection or empty space click.
          }
 
-                function animate() {
+        function animate() {
             renderer.setAnimationLoop(() => {
-                const delta = clock.getDelta(); // Keep for movement
+                const delta = clock.getDelta(); // Keep for movement and animation
 
-                // --- REMOVED PLANET ORBIT LOOP ---
-                /*
-                planetObjects.forEach(obj => {
-                    // ... orbit/rotation code ...
-                });
-                */
+                // --- RE-ENABLED PLANET ORBIT LOOP ---
+                // Check if planetObjects exists and has elements before looping
+                if (window.planetObjects && planetObjects.length > 0) {
+                    planetObjects.forEach(obj => {
+                        // Orbiting: Rotate the group the planet is in
+                        if (obj.orbitGroup) {
+                            obj.orbitGroup.rotation.y += obj.speed * delta * 5; // Adjust speed multiplier if needed
+                        }
+                        // Self-rotation: Rotate the planet mesh itself
+                        obj.mesh.rotation.y += 0.1 * delta; // Adjust rotation speed if needed
+                    });
+                 }
 
                  // Handle VR Controller Input for Movement (Keep basic movement)
                  if (renderer.xr.isPresenting) {
                      const session = renderer.xr.getSession();
                      if (session && session.inputSources) {
-                          let primaryController = null;
+                          let primaryController = null; // Find the controller with gamepad first for movement
                           session.inputSources.forEach((source, index) => {
                               const targetController = (index === 0) ? controller1 : controller2;
                               if (targetController) {
                                   targetController.userData.gamepad = source.gamepad || null;
-                                  if (source.gamepad && !primaryController) primaryController = targetController;
+                                  if (source.gamepad && !primaryController) primaryController = targetController; // Assign first controller with gamepad
                               }
                           });
+                           // Use primary (gamepad) controller for movement, default to controller2 if needed
                            const moveController = primaryController || controller2;
                            if (moveController) handleControllerInput(moveController, delta); // Keep movement call
                      }
 
                      // --- REMOVED INTERACTION UPDATES ---
-                     // updateInteractions();
+                     // updateInteractions(); // Keep commented out
 
                      // --- REMOVED UI PANEL POSITIONING ---
                      /*
                      if (selectedPlanet && infoPanelDiv.style.display === 'block') {
-                         // ... panel positioning ...
+                         // ... panel positioning ... // Keep commented out
                      }
                      */
                  }
@@ -427,7 +434,7 @@
                 renderer.render(scene, camera);
 
                 // --- REMOVED CSS2D RENDER CALL ---
-                // css2DRenderer.render(scene, camera);
+                // css2DRenderer.render(scene, camera); // Keep commented out
             });
         }
         
