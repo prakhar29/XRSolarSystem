@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.10<br/>
+        WebXR Solar System Explorer V0.11<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -154,8 +154,8 @@
 
             // Controllers (Setup for movement ONLY, no models, no select events)
             controller1 = renderer.xr.getController(0);
-            // controller1.addEventListener('selectstart', onSelectStart); // REMOVED
-            // controller1.addEventListener('selectend', onSelectEnd); // REMOVED
+            controller1.addEventListener('selectstart', onSelectStart); // REMOVED
+            controller1.addEventListener('selectend', onSelectEnd); // REMOVED
             userGroup.add(controller1);
 
             controller2 = renderer.xr.getController(1);
@@ -163,13 +163,13 @@
 
             // --- REMOVED CONTROLLER MODELS ---
             // --- REMOVED CONTROLLER LINE / RAYCASTER ---
-             /*
+             
              const controllerLineMat = new THREE.LineBasicMaterial({...});
              const controllerLineGeom = new THREE.BufferGeometry()...;
              controllerLine = new THREE.Line(...);
              controller1.add(controllerLine);
              raycaster = new THREE.Raycaster();
-            */
+            
 
             // --- Lighting (Keep minimal) ---
             const ambientLight = new THREE.AmbientLight( 0xffffff, 1.5 );
@@ -420,7 +420,7 @@
                      }
 
                      // --- REMOVED INTERACTION UPDATES ---
-                     // updateInteractions(); // Keep commented out
+                     updateInteractions(); // Keep commented out
 
                      // --- REMOVED UI PANEL POSITIONING ---
                      /*
