@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.12<br/>
+        WebXR Solar System Explorer V0.13<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -386,52 +386,61 @@
          }
 
         function animate() {
-            renderer.setAnimationLoop(() => {
+            renderer.setAnimationLoop(() => { // Arrow function for loop starts
                 const delta = clock.getDelta(); // Keep for movement and animation
 
                 // --- Planet Orbit Loop (Keep) ---
-                if (window.planetObjects && planetObjects.length > 0) {
-                    planetObjects.forEach(obj => {
+                if (window.planetObjects && planetObjects.length > 0) { // Check if array exists
+                    planetObjects.forEach(obj => { // Loop through planets
                         // Orbiting
-                        if (obj.orbitGroup) {
+                        if (obj.orbitGroup) { // Check if it has orbit group
                             obj.orbitGroup.rotation.y += obj.speed * delta * 5;
-                        }
+                        } // End if orbitGroup
                         // Self-rotation
                         obj.mesh.rotation.y += 0.1 * delta;
-                    });
-                 }
+                    }); // End forEach planet
+                 } // End if planetObjects exist
 
                  // Handle VR Controller Input for Movement & Interactions
-                 if (renderer.xr.isPresenting) {
+                 if (renderer.xr.isPresenting) { // Check if in VR
                      // Gamepad Update & Movement Logic (Keep)
                      const session = renderer.xr.getSession();
-                     if (session && session.inputSources) {
+                     if (session && session.inputSources) { // Check session and input sources
                           let primaryController = null;
-                          session.inputSources.forEach((source, index) => {
+                          session.inputSources.forEach((source, index) => { // Loop through sources
                               const targetController = (index === 0) ? controller1 : controller2;
-                              if (targetController) {
+                              if (targetController) { // Check if controller object exists
                                   targetController.userData.gamepad = source.gamepad || null;
-                                  if (source.gamepad && !primaryController) primaryController = targetController;
-                              }
-                          });
+                                  if (source.gamepad && !primaryController) { // Check if gamepad exists and primary not set
+                                     primaryController = targetController;
+                                  } // End if source.gamepad
+                              } // End if targetController
+                          }); // End forEach source
+
                            const moveController = primaryController || controller2;
-                           if (moveController) handleControllerInput(moveController, delta);
-                     }
+                           if (moveController) { // Check if we have a controller for movement
+                              handleControllerInput(moveController, delta);
+                           } // End if moveController
+                     } // End if session and inputSources
 
                      // --- RE-ENABLED INTERACTION UPDATES ---
                      updateInteractions(); // <-- RE-ENABLED THIS CALL
 
                      // --- REMOVED UI PANEL POSITIONING ---
-                     // ... (UI positioning remains commented out) ...
-                 }
+                     /*
+                     if (selectedPlanet && infoPanelDiv.style.display === 'block') {
+                         // ... panel positioning ... // Keep commented out
+                     }
+                     */
+                 } // End if isPresenting
 
                 // Render Scene (Keep)
                 renderer.render(scene, camera);
 
                 // --- REMOVED CSS2D RENDER CALL ---
                 // css2DRenderer.render(scene, camera); // Keep commented out
-            });
-        }
+            }); // End of setAnimationLoop callback
+        } // End of animate function
 
                 // Render Scene (Keep)
                 renderer.render(scene, camera);
