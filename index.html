@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.5<br/> {/* <-- Version added here */}
+        WebXR Solar System Explorer V0.6<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -123,8 +123,11 @@
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer = new THREE.WebGLRenderer({
+                 antialias: true // Keep basic AA for now, disable if still slow
+            });
+            // --- OPTIMIZATION: Cap Pixel Ratio ---
+            renderer.setPixelRatio( Math.min(window.devicePixelRatio, 1.5) ); // Cap at 1.5x native res
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
@@ -134,7 +137,7 @@
             css2DRenderer.setSize(window.innerWidth, window.innerHeight);
             css2DRenderer.domElement.style.position = 'absolute';
             css2DRenderer.domElement.style.top = '0px';
-            css2DRenderer.domElement.style.pointerEvents = 'none'; // Don't let it block canvas events
+            css2DRenderer.domElement.style.pointerEvents = 'none';
             document.body.appendChild(css2DRenderer.domElement);
 
             // User Group
@@ -147,15 +150,17 @@
             vrButton = VRButton.createButton(renderer);
             document.getElementById('vr-button-container').appendChild(vrButton);
 
-            // Controllers & Models
+            // Controllers
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart); // Event listener for trigger press
-            controller1.addEventListener('selectend', onSelectEnd); // Optional: could hide panel on release
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
             userGroup.add(controller1);
 
             controller2 = renderer.xr.getController(1);
             userGroup.add(controller2);
 
+            // --- OPTIMIZATION: Remove Controller Models ---
+            /*
             const controllerModelFactory = new XRControllerModelFactory();
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
@@ -164,26 +169,21 @@
             controllerGrip2 = renderer.xr.getControllerGrip(1);
             controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
             userGroup.add(controllerGrip2);
+            */
 
-             // Controller Line for Pointing/Raycasting
+             // Controller Line for Pointing/Raycasting (Keep this)
              const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
-             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]); // Line points forward, make it longer
+             // Use a simpler geometry just in case
+             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]);
              controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
-             controller1.add(controllerLine); // Add line to the controller
+             controller1.add(controllerLine);
 
              // Raycaster
              raycaster = new THREE.Raycaster();
 
             // --- Lighting (Optimized) ---
-            // Use only AmbientLight for performance. Increase intensity.
-            const ambientLight = new THREE.AmbientLight(
-                0xffffff, // White light
-                1.5       // << INCREASED INTENSITY
-            );
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5 );
             scene.add(ambientLight);
-
-            // --- POINT LIGHT REMOVED ---
-            // (No PointLight code here)
 
             // --- Create Solar System ---
             createSolarSystem(); // Call the function to create planets etc.
@@ -194,9 +194,8 @@
             // --- Create UI Panel Object ---
             infoPanelDiv = document.getElementById('infoPanel');
             infoPanelObject = new CSS2DObject(infoPanelDiv);
-            infoPanelObject.position.set(0, 0, 0); // Initial position, will be moved
-            // Add to scene initially, or add it when needed. Adding here is fine.
-            scene.add(infoPanelObject); // Make sure it's added to the main scene, not user group
+            infoPanelObject.position.set(0, 0, 0);
+            scene.add(infoPanelObject);
 
 
             window.addEventListener('resize', onWindowResize, false);
@@ -205,26 +204,25 @@
         function createSolarSystem() {
             solarSystemData.forEach(data => {
                 const isSun = data.name === 'Sun';
-                const geometry = new THREE.SphereGeometry(data.radius, 32, 16);
+                // --- OPTIMIZATION: Reduce Sphere Segments ---
+                const geometry = new THREE.SphereGeometry(
+                    data.radius,
+                    24, // Reduced width segments (from 32)
+                    12  // Reduced height segments (from 16)
+                 );
 
                 let material;
-                if (isSun) {
-                    material = new THREE.MeshBasicMaterial({
-                        color: data.color,
-                        // emissive: data.emissive, // Basic already glows with color
-                        // emissiveIntensity: 1.5
-                    });
-                } else {
-                    material = new THREE.MeshStandardMaterial({
-                        color: data.color,
-                        roughness: 0.8,
-                        metalness: 0.1
-                    });
-                }
+                // --- OPTIMIZATION: Use MeshBasicMaterial for planets ---
+                material = new THREE.MeshBasicMaterial({
+                    color: data.color,
+                    // No lighting calculations needed for BasicMaterial
+                });
+                // We no longer need the distinction between Sun and Planet material types
+                // as both will be MeshBasicMaterial.
 
                 const mesh = new THREE.Mesh(geometry, material);
-                mesh.name = data.name; // Important for identification
-                mesh.userData = data; // Store all data (including facts) on the mesh
+                mesh.name = data.name;
+                mesh.userData = data;
 
                 let orbitGroup = null;
                 if (!isSun) {
@@ -233,19 +231,21 @@
                     mesh.position.x = data.distance;
                     orbitGroup.add(mesh);
 
-                    // Keep orbit path visualization
-                    const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 128);
-                    orbitPathGeometry.rotateX(-Math.PI / 2);
-                    const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
-                    const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
-                    scene.add(orbitPathMesh);
+                     // --- OPTIMIZATION: Reduce Orbit Ring Segments ---
+                     const orbitPathGeometry = new THREE.RingGeometry(
+                         data.distance - 0.1,
+                         data.distance + 0.1,
+                         64 // Reduced segments (from 128)
+                     );
+                     orbitPathGeometry.rotateX(-Math.PI / 2);
+                     const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
+                     const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
+                     scene.add(orbitPathMesh);
 
-                    // Add planet mesh to the list for raycasting
                     selectablePlanets.push(mesh);
 
                 } else {
                     scene.add(mesh); // Add sun directly
-                    // Don't add Sun to selectablePlanets
                 }
 
                 planetObjects.push({
@@ -253,16 +253,21 @@
                     orbitGroup: orbitGroup,
                     speed: data.speed,
                     distance: data.distance,
-                    data: data // Store data reference here too if needed elsewhere
+                    data: data
                 });
 
-                // Special case: Saturn's Rings (using solid color)
+                // Special case: Saturn's Rings (already BasicMaterial, reduce geometry)
                 if (data.name === 'Saturn') {
-                    const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 64);
+                     // --- OPTIMIZATION: Reduce Ring Segments ---
+                    const ringGeometry = new THREE.RingGeometry(
+                        data.radius * 1.2,
+                        data.radius * 2.2,
+                        32 // Reduced segments (from 64)
+                     );
                     ringGeometry.rotateX(Math.PI * 0.45);
                     ringGeometry.rotateY(Math.PI * 0.1);
-                    const ringMaterial = new THREE.MeshBasicMaterial({ // Changed to Basic for solid color
-                        color: 0xcccccc, // Light grey color for rings
+                    const ringMaterial = new THREE.MeshBasicMaterial({
+                        color: 0xcccccc,
                         side: THREE.DoubleSide,
                         transparent: true,
                         opacity: 0.6
@@ -272,24 +277,20 @@
                 }
             });
         }
-
         function createStarfield() {
-            const numStars = 10000; // Adjust count as needed for density/performance
-            const starRadius = 500; // How far out the stars are placed
+            // --- OPTIMIZATION: Reduce Star Count ---
+            const numStars = 5000; // Reduced from 10000
+            const starRadius = 500;
 
             const starVertices = [];
             for (let i = 0; i < numStars; i++) {
-                // Create random points on the surface of a sphere
                 const u = Math.random();
                 const v = Math.random();
-                const theta = 2 * Math.PI * u; // Azimuthal angle
-                const phi = Math.acos(2 * v - 1); // Polar angle
-
-                // Convert spherical to Cartesian coordinates
+                const theta = 2 * Math.PI * u;
+                const phi = Math.acos(2 * v - 1);
                 const x = starRadius * Math.sin(phi) * Math.cos(theta);
                 const y = starRadius * Math.sin(phi) * Math.sin(theta);
                 const z = starRadius * Math.cos(phi);
-
                 starVertices.push(x, y, z);
             }
 
@@ -297,12 +298,12 @@
             starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
 
             const starMaterial = new THREE.PointsMaterial({
-                color: 0xffffff,      // White stars
-                size: 0.7,            // Adjust size of stars (in pixels)
-                sizeAttenuation: true, // Stars farther away appear smaller
-                transparent: true,    // Needed for blending
-                blending: THREE.AdditiveBlending, // Creates a glow effect where stars overlap
-                depthWrite: false     // Helps with blending transparency
+                color: 0xffffff,
+                size: 0.7, // Keep size for visibility
+                sizeAttenuation: true,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
             });
 
             const starField = new THREE.Points(starGeometry, starMaterial);
