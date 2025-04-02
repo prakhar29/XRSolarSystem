@@ -41,7 +41,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.14<br/>
+        WebXR Solar System Explorer V0.15<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -278,26 +278,36 @@
             }
         } // End of handleControllerInput
 
-        function updateInteractions() {
-            // Raycasting logic (no changes needed here)
-            intersectedObject = null; // Reset intersection
-            // Check controller1 exists before using it
-            if (renderer.xr.isPresenting && controller1 && controllerLine) {
-                const controllerMatrix = controller1.matrixWorld;
-                const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerMatrix.getPosition(new THREE.Vector3()));
-                raycaster.set(controllerMatrix.getPosition(new THREE.Vector3()), rayDirection.normalize());
-                const intersects = raycaster.intersectObjects(selectablePlanets, false);
+    function updateInteractions() {
+        intersectedObject = null; // Reset intersection (doesn't matter now but keep for structure)
 
-                if (intersects.length > 0) {
-                    intersectedObject = intersects[0].object;
-                    controllerLine.material.color.set(highlightColor);
-                } else {
-                     controllerLine.material.color.set(defaultLineColor);
-                }
-            } else if (controllerLine) { // Reset color if not presenting or no controller
+        // Check controller1 exists before using it
+        if (renderer.xr.isPresenting && controller1 && controllerLine) {
+            // --- Keep Raycaster Setup ---
+            const controllerMatrix = controller1.matrixWorld;
+            const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerMatrix.getPosition(new THREE.Vector3()));
+            raycaster.set(controllerMatrix.getPosition(new THREE.Vector3()), rayDirection.normalize());
+
+            // --- TEMPORARILY DISABLE INTERSECTION TEST ---
+            /*
+            const intersects = raycaster.intersectObjects(selectablePlanets, false);
+
+            if (intersects.length > 0) {
+                intersectedObject = intersects[0].object;
+                controllerLine.material.color.set(highlightColor);
+            } else {
                  controllerLine.material.color.set(defaultLineColor);
             }
-        } // End of updateInteractions
+            */
+
+            // Force line color to default for this test
+            controllerLine.material.color.set(defaultLineColor);
+
+
+        } else if (controllerLine) { // Reset color if not presenting or no controller
+             controllerLine.material.color.set(defaultLineColor);
+        }
+    } // End of updateInteractions
 
         function onSelectStart() {
              // Triggered by controller button press
