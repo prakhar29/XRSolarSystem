@@ -41,7 +41,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.18<br/>
+        WebXR Solar System Explorer V0.19<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -69,32 +69,28 @@
     <script type="module">
         import * as THREE from 'three';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
-        // import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Keep commented out
-        // import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'; // Keep commented out
+        // No XRControllerModelFactory needed
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'; // Re-enable CSS2D
 
         // --- Basic Setup ---
         let scene, camera, renderer, clock;
         let vrButton;
         let userGroup;
-        let controller1, controller2; // Removed controllerGrip vars as models are removed
-        let controllerLine; // Reference to the line on controller1
+        let controller1, controller2;
         const movementSpeed = 2.0;
 
-        // --- Interaction ---
-        let raycaster;
-        let intersectedObject = null; // Track the currently pointed-at planet
-        const highlightColor = new THREE.Color(0x00ff00); // Green highlight
-        const defaultLineColor = new THREE.Color(0xffffff); // White default
+        // --- Interaction (Cycling) ---
+        let currentPlanetIndex = -1; // Start with no planet selected
+        let selectedPlanetObject = null; // The Three.js object of the selected planet
 
-        // --- 2D UI (Keep vars, but objects/renderer not created) ---
-        // let css2DRenderer;
-        let infoPanelDiv; // Keep reference to the div element
-        // let infoPanelObject;
-        let selectedPlanet = null; // Keep track of selected planet
+        // --- 2D UI (Re-enabled) ---
+        let css2DRenderer;
+        let infoPanelDiv;
+        let infoPanelObject; // The CSS2D object wrapper for the panel
 
         // --- Solar System Data ---
-        const solarSystemData = [
-            { name: 'Sun', radius: 5, distance: 0, speed: 0, color: 0xffd700, emissive: 0xffd700, facts: ["Star", "Center of Solar System", "Surface Temp: ~5,500 °C"] },
+        const solarSystemData = [ // Ensure Sun is NOT included here if not selectable
+             // Sun data still needed for creation, but filter it out for selection list
             { name: 'Mercury', radius: 0.5, distance: 15, speed: 0.047, color: 0xaaaaaa, facts: ["Smallest Planet", "Shortest Orbit (88 days)", "Extreme Temperatures"] },
             { name: 'Venus', radius: 0.9, distance: 22, speed: 0.035, color: 0xffe4b5, facts: ["Hottest Planet", "Thick CO2 Atmosphere", "Rotates Backwards"] },
             { name: 'Earth', radius: 1, distance: 30, speed: 0.029, color: 0x4682b4, facts: ["Our Home", "Only Known Life", "Liquid Water Surface"] },
@@ -104,123 +100,113 @@
             { name: 'Uranus', radius: 2, distance: 115, speed: 0.006, color: 0xadd8e6, facts: ["Ice Giant", "Tilted Axis", "Faint Rings"] },
             { name: 'Neptune', radius: 1.9, distance: 140, speed: 0.005, color: 0x00008b, facts: ["Ice Giant", "Strongest Winds", "Great Dark Spot (Variable)"] }
         ];
+        // We need the Sun's data separately for creation if it's not in the selectable list
+        const sunData = { name: 'Sun', radius: 5, distance: 0, speed: 0, color: 0xffd700, emissive: 0xffd700, facts: ["Star", "Center of Solar System", "Surface Temp: ~5,500 °C"] };
 
-        const planetObjects = []; // Stores { mesh, orbitGroup, speed, distance, data }
-        const selectablePlanets = []; // Stores just the planet meshes for raycasting
+
+        const planetObjects = []; // Stores { mesh, orbitGroup, speed, distance, data } from creation
+        const selectablePlanetMeshes = []; // Stores just the planet meshes for cycling logic
 
         // --- Function Definitions ---
 
         function init() {
             scene = new THREE.Scene();
-            clock = new THREE.Clock(); // Keep clock for movement delta
+            clock = new THREE.Clock();
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
             // Use minimal renderer settings
-            renderer = new THREE.WebGLRenderer({
-                 antialias: false // AA Disabled
-            });
-            renderer.setPixelRatio( 1 ); // Force 1.0 pixel ratio (simplest)
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setPixelRatio( 1 );
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // --- REMOVED CSS2D RENDERER SETUP ---
-            /*
+            // --- RE-ENABLE CSS2D RENDERER SETUP ---
             css2DRenderer = new CSS2DRenderer();
             css2DRenderer.setSize(window.innerWidth, window.innerHeight);
             css2DRenderer.domElement.style.position = 'absolute';
             css2DRenderer.domElement.style.top = '0px';
-            css2DRenderer.domElement.style.pointerEvents = 'none';
+            css2DRenderer.domElement.style.pointerEvents = 'none'; // Keep this
             document.body.appendChild(css2DRenderer.domElement);
-            */
 
             // User Group (Keep for movement)
             userGroup = new THREE.Group();
             userGroup.position.set(0, 5, 45);
-            userGroup.add(camera);
+            userGroup.add(camera); // Camera moves with user group
             scene.add(userGroup);
 
             // VR Button (Keep)
             vrButton = VRButton.createButton(renderer);
             document.getElementById('vr-button-container').appendChild(vrButton);
 
-            // Controllers (Setup for movement AND interaction events)
+            // Controllers (Setup for movement AND cycling event)
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart); // <-- RE-ENABLED
-            controller1.addEventListener('selectend', onSelectEnd);     // <-- RE-ENABLED
+            controller1.addEventListener('selectstart', onCycleNextPlanet); // Use selectstart to cycle
             userGroup.add(controller1);
 
-            controller2 = renderer.xr.getController(1);
+            controller2 = renderer.xr.getController(1); // Keep second controller object
             userGroup.add(controller2);
 
-            // --- REMOVED CONTROLLER MODELS ---
-
-             // --- RE-ENABLED CONTROLLER LINE / RAYCASTER ---
-             const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
-             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]);
-             controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
-             controller1.add(controllerLine); // <-- RE-ENABLED
-
-             raycaster = new THREE.Raycaster(); // <-- RE-ENABLED
+            // --- NO CONTROLLER MODELS, NO CONTROLLER LINE, NO RAYCASTER ---
 
             // --- Lighting (Keep minimal) ---
             const ambientLight = new THREE.AmbientLight( 0xffffff, 1.5 );
             scene.add(ambientLight);
 
-            // --- RE-ENABLE SOLAR SYSTEM CREATION CALL ---
-            createSolarSystem(); // Keep uncommented
+            // --- Create Solar System (Populates selectablePlanetMeshes) ---
+            createSolarSystem();
 
-            // --- RE-ENABLE STARFIELD CREATION CALL ---
-            createStarfield(); // Keep uncommented
+            // --- Create Starfield (Keep) ---
+            createStarfield();
 
-            // --- REMOVED UI PANEL OBJECT CREATION ---
-            infoPanelDiv = document.getElementById('infoPanel'); // Still get reference to div if needed later
-            /*
+            // --- Create UI Panel Object and attach to Camera ---
+            infoPanelDiv = document.getElementById('infoPanel');
             infoPanelObject = new CSS2DObject(infoPanelDiv);
-            infoPanelObject.position.set(0, 0, 0);
-            scene.add(infoPanelObject);
-            */
+            // Position it in front of the camera
+            infoPanelObject.position.set(0, 0, -1.5); // Adjust Z for distance, X/Y for offset
+            camera.add(infoPanelObject); // Add as child of CAMERA so it stays in view
 
-            window.addEventListener('resize', onWindowResize, false); // Keep resize
+            window.addEventListener('resize', onWindowResize, false);
         } // End of init function
 
         function createSolarSystem() {
-            solarSystemData.forEach(data => {
-                const isSun = data.name === 'Sun';
-                // Optimized Sphere Geometry
-                const geometry = new THREE.SphereGeometry(data.radius, 24, 12);
-                // Optimized Basic Material
-                const material = new THREE.MeshBasicMaterial({ color: data.color });
+             // Create Sun first (not added to selectable list)
+            const sunGeom = new THREE.SphereGeometry(sunData.radius, 24, 12);
+            const sunMat = new THREE.MeshBasicMaterial({ color: sunData.color });
+            const sunMesh = new THREE.Mesh(sunGeom, sunMat);
+            sunMesh.name = sunData.name;
+            sunMesh.userData = sunData;
+            scene.add(sunMesh);
+            planetObjects.push({ mesh: sunMesh, orbitGroup: null, speed: 0, distance: 0, data: sunData });
 
+            // Create Planets
+            solarSystemData.forEach(data => { // Use the array without the Sun
+                const geometry = new THREE.SphereGeometry(data.radius, 24, 12);
+                const material = new THREE.MeshBasicMaterial({ color: data.color });
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.name = data.name;
                 mesh.userData = data;
 
-                let orbitGroup = null;
-                if (!isSun) {
-                    orbitGroup = new THREE.Group();
-                    scene.add(orbitGroup);
-                    mesh.position.x = data.distance;
-                    orbitGroup.add(mesh);
+                const orbitGroup = new THREE.Group();
+                scene.add(orbitGroup);
+                mesh.position.x = data.distance;
+                orbitGroup.add(mesh);
 
-                     // Optimized Orbit Ring Geometry
-                     const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 64);
-                     orbitPathGeometry.rotateX(-Math.PI / 2);
-                     const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
-                     const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
-                     scene.add(orbitPathMesh);
+                // Orbit Path
+                const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 64);
+                orbitPathGeometry.rotateX(-Math.PI / 2);
+                const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
+                const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
+                scene.add(orbitPathMesh);
 
-                    selectablePlanets.push(mesh);
-                } else {
-                    scene.add(mesh); // Add sun directly
-                }
-
+                // Add to list for cycling and main list
+                selectablePlanetMeshes.push(mesh);
                 planetObjects.push({
                     mesh: mesh, orbitGroup: orbitGroup, speed: data.speed, distance: data.distance, data: data
                 });
 
-                // Special case: Saturn's Rings (Optimized Geometry)
+                // Saturn's Rings
                 if (data.name === 'Saturn') {
                     const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 32);
                     ringGeometry.rotateX(Math.PI * 0.45); ringGeometry.rotateY(Math.PI * 0.1);
@@ -233,8 +219,7 @@
 
         function createStarfield() {
             // Optimized Star Count
-            const numStars = 5000;
-            const starRadius = 500;
+            const numStars = 5000; const starRadius = 500;
             const starVertices = [];
             for (let i = 0; i < numStars; i++) {
                 const u = Math.random(); const v = Math.random();
@@ -258,11 +243,14 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            // No need to resize css2DRenderer as it's not created
+            // Resize CSS2D renderer too
+            if (css2DRenderer) {
+                 css2DRenderer.setSize(window.innerWidth, window.innerHeight);
+            }
         } // End of onWindowResize
 
         function handleControllerInput(controller, delta) {
-            // Basic movement logic (no changes needed here)
+            // Basic movement logic (unchanged)
             if (controller.userData.gamepad) {
                 const gamepad = controller.userData.gamepad;
                 if (gamepad.axes.length >= 4) {
@@ -270,137 +258,94 @@
                     if (Math.abs(moveZ) > 0.1) {
                         const moveDirection = new THREE.Vector3(0, 0, -1);
                         moveDirection.applyQuaternion(controller.quaternion);
-                        // moveDirection.y = 0; // Optional: Prevent vertical movement
-                        // moveDirection.normalize();
                         userGroup.position.addScaledVector(moveDirection, -moveZ * movementSpeed * delta);
                     }
                 }
             }
         } // End of handleControllerInput
 
-    function updateInteractions() {
-        intersectedObject = null; // Reset intersection
+        // --- REMOVED updateInteractions function ---
 
-        // Ensure controller, line, and raycaster are ready before proceeding
-        if (renderer.xr.isPresenting && controller1 && controllerLine && raycaster) {
-            const controllerMatrix = controller1.matrixWorld;
-            const controllerPosition = controllerMatrix.getPosition(new THREE.Vector3());
-            const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerPosition).normalize();
+        function onCycleNextPlanet() {
+            if (selectablePlanetMeshes.length === 0) return; // No planets to cycle through
 
-            raycaster.set(controllerPosition, rayDirection);
-
-            // --- KEEP INTERSECTION TEST DISABLED FOR THIS TEST ---
-            /*
-            const intersects = raycaster.intersectObjects(selectablePlanets, false);
-
-            if (intersects.length > 0) {
-                intersectedObject = intersects[0].object;
-                controllerLine.material.color.set(highlightColor);
-            } else {
-                 controllerLine.material.color.set(defaultLineColor);
+            // Optional: Reset scale/color of previously selected planet
+            if (selectedPlanetObject) {
+                // Example: Reset scale if you changed it
+                // selectedPlanetObject.scale.set(1, 1, 1);
             }
-            */
 
-            // Force line color to default for this test
-            controllerLine.material.color.set(defaultLineColor);
+            // Increment index and wrap around
+            currentPlanetIndex = (currentPlanetIndex + 1) % selectablePlanetMeshes.length;
+
+            // Get the newly selected planet mesh and its data
+            selectedPlanetObject = selectablePlanetMeshes[currentPlanetIndex];
+            const data = selectedPlanetObject.userData;
+
+            console.log("Cycled to:", data.name);
+
+            // Optional: Apply visual effect to newly selected planet
+            // Example: Slightly increase scale
+            // selectedPlanetObject.scale.set(1.1, 1.1, 1.1);
 
 
-        } else if (controllerLine) {
-             // Ensure line color is default if not in VR or controller isn't ready
-             controllerLine.material.color.set(defaultLineColor);
-        }
-    } // End of updateInteractions
-        
-        function onSelectStart() {
-             // Triggered by controller button press
-             // Only log for now, no UI manipulation
-             if (intersectedObject) {
-                 console.log("Selected:", intersectedObject.name);
-                 selectedPlanet = intersectedObject; // Keep track of selection
-                 // NO UI panel manipulation here yet
-             } else {
-                 console.log("Selected empty space");
-                 selectedPlanet = null;
-                 // NO UI panel manipulation here yet
-             }
-         } // End of onSelectStart
+            // Update the HTML panel content
+            document.getElementById('panelTitle').textContent = data.name;
+            document.getElementById('panelFact1').textContent = data.facts[0] || '';
+            document.getElementById('panelFact2').textContent = data.facts[1] || '';
+            document.getElementById('panelFact3').textContent = data.facts[2] || '';
 
-         function onSelectEnd() {
-            // Optional: Could add logic here if needed on release
-            // console.log("Select end");
-         } // End of onSelectEnd
+            // Make the panel visible
+            if (infoPanelDiv) { // Check if div exists
+                 infoPanelDiv.style.display = 'block';
+            }
+        } // End of onCycleNextPlanet
 
-                // --- Throttling Setup ---
-        let interactionFrameCounter = 0;
-        const interactionCheckInterval = 3; // Check interactions every 3 frames (Adjust if needed)
+        // --- REMOVED onSelectEnd function (or keep empty if needed) ---
 
         function animate() {
-            renderer.setAnimationLoop(() => { // Arrow function for loop starts
-                const delta = clock.getDelta(); // Keep for movement and animation
+            renderer.setAnimationLoop(() => {
+                const delta = clock.getDelta();
 
-                // --- Planet Orbit Loop (Keep) ---
-                if (window.planetObjects && planetObjects.length > 0) { // Check if array exists
-                    planetObjects.forEach(obj => { // Loop through planets
-                        // Orbiting
-                        if (obj.orbitGroup) { // Check if it has orbit group
-                            obj.orbitGroup.rotation.y += obj.speed * delta * 5;
-                        } // End if orbitGroup
-                        // Self-rotation
+                // Planet Orbit Loop (Keep)
+                if (window.planetObjects && planetObjects.length > 0) {
+                    planetObjects.forEach(obj => {
+                        if (obj.orbitGroup) { obj.orbitGroup.rotation.y += obj.speed * delta * 5; }
                         obj.mesh.rotation.y += 0.1 * delta;
-                    }); // End forEach planet
-                 } // End if planetObjects exist
+                    });
+                 }
 
-                 // Handle VR Controller Input for Movement & Interactions
-                 if (renderer.xr.isPresenting) { // Check if in VR
-                     // Gamepad Update & Movement Logic (Keep)
+                 // Handle VR Controller Input for Movement (Keep)
+                 if (renderer.xr.isPresenting) {
                      const session = renderer.xr.getSession();
-                     if (session && session.inputSources) { // Check session and input sources
+                     if (session && session.inputSources) {
                           let primaryController = null;
-                          session.inputSources.forEach((source, index) => { // Loop through sources
+                          session.inputSources.forEach((source, index) => {
                               const targetController = (index === 0) ? controller1 : controller2;
-                              if (targetController) { // Check if controller object exists
+                              if (targetController) {
                                   targetController.userData.gamepad = source.gamepad || null;
-                                  if (source.gamepad && !primaryController) { // Check if gamepad exists and primary not set
-                                     primaryController = targetController;
-                                  } // End if source.gamepad
-                              } // End if targetController
-                          }); // End forEach source
-
+                                  if (source.gamepad && !primaryController) primaryController = targetController;
+                              }
+                          });
                            const moveController = primaryController || controller2;
-                           if (moveController) { // Check if we have a controller for movement
-                              handleControllerInput(moveController, delta);
-                           } // End if moveController
-                     } // End if session and inputSources
-
-                     // --- Throttled Interaction Updates ---
-                     interactionFrameCounter++;
-                     if (interactionFrameCounter % interactionCheckInterval === 0) {
-                         updateInteractions(); // Call less frequently
+                           if (moveController) handleControllerInput(moveController, delta);
                      }
-
-                     // --- REMOVED UI PANEL POSITIONING ---
-                     /*
-                     if (selectedPlanet && infoPanelDiv.style.display === 'block') {
-                         // ... panel positioning ... // Keep commented out for now
-                     }
-                     */
-                 } else {
-                     // Optional: When not in VR, maybe check every frame or reset counter
-                     interactionFrameCounter = 0; // Reset counter when exiting VR
-                     // updateInteractions(); // Uncomment if you want desktop interaction highlighting
-                 } // End if isPresenting
+                     // --- NO CALL to updateInteractions ---
+                 }
 
                 // Render Scene (Keep)
                 renderer.render(scene, camera);
 
-                // --- REMOVED CSS2D RENDER CALL ---
-                // css2DRenderer.render(scene, camera); // Keep commented out for now
-            }); // End of setAnimationLoop callback
+                // --- RE-ENABLE CSS2D RENDER CALL ---
+                if (css2DRenderer) {
+                     css2DRenderer.render(scene, camera);
+                }
+            });
         } // End of animate function
 
         // --- Start the experience ---
         init();
-        animate();
+        animate(); // Animate automatically starts the loop
 
     </script> // End of module script
 </body>
