@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebXR Solar System Explorer</title>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; color: #fff; font-family: sans-serif; }
+        #info { position: absolute; top: 10px; width: 100%; text-align: center; z-index: 100; display:block; padding: 5px; background-color: rgba(0,0,0,0.5); }
+        a { color: #0af }
+        #vr-button-container { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 101; }
+        /* Basic VR Button Styling (VRButton.js will add its own button) */
+         #VRButton { background-color: #2a2; color: white; border: none; padding: 10px 20px; font-size: 16px; cursor: pointer; border-radius: 5px; }
+         #VRButton:hover { background-color: #3b3; }
+         #VRButton:disabled { background-color: #555; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        WebXR Solar System Explorer<br/>
+        Look around with your headset. Use the primary controller's thumbstick/touchpad (usually right) to move forward/backward.
+    </div>
+     <div id="vr-button-container"></div>
+
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Optional, for visualizing controllers
+
+        // --- Basic Setup ---
+        let scene, camera, renderer, clock;
+        let vrButton;
+        let userGroup; // Group to move the user (camera + controllers)
+        let controller1, controller2; // XR Controllers
+        const movementSpeed = 2.0; // Units per second for smooth locomotion
+
+        // --- Solar System Data ---
+        // NOTE: Scales and distances are NOT astrophysically accurate but adjusted for visualization.
+        // Distances are roughly logarithmic. Sizes are also scaled non-linearly.
+        // Textures from a simple source - consider hosting your own!
+        const textureLoader = new THREE.TextureLoader();
+        const solarSystemData = [
+            { name: 'Sun', radius: 5, distance: 0, speed: 0, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/sun.jpg', emissive: 0xffff00 },
+            { name: 'Mercury', radius: 0.5, distance: 15, speed: 0.047, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/mercury.jpg' },
+            { name: 'Venus', radius: 0.9, distance: 22, speed: 0.035, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/venus_surface.jpg' },
+            { name: 'Earth', radius: 1, distance: 30, speed: 0.029, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_atmos_2048.jpg' },
+            { name: 'Mars', radius: 0.7, distance: 40, speed: 0.024, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/mars.jpg' },
+            { name: 'Jupiter', radius: 3.5, distance: 65, speed: 0.013, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/jupiter.jpg' },
+            { name: 'Saturn', radius: 3, distance: 90, speed: 0.009, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/saturn.jpg' }, // Ring added separately
+            { name: 'Uranus', radius: 2, distance: 115, speed: 0.006, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/uranus.jpg' },
+            { name: 'Neptune', radius: 1.9, distance: 140, speed: 0.005, texture: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/neptune.jpg' }
+        ];
+
+        const planetObjects = []; // To store planet mesh and orbit group
+
+        init();
+        animate();
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            clock = new THREE.Clock();
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+             // Position user slightly above the ecliptic plane
+            camera.position.set(0, 10, 50);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // User Group for Movement
+            userGroup = new THREE.Group();
+            userGroup.position.set(0, 5, 45); // Initial position slightly away from the sun
+            userGroup.add(camera); // Add camera to the group
+            scene.add(userGroup);
+
+            // VR Button
+            vrButton = VRButton.createButton(renderer);
+            document.getElementById('vr-button-container').appendChild(vrButton);
+
+            // Controllers
+            controller1 = renderer.xr.getController(0);
+            userGroup.add(controller1); // Add controllers to the user group as well
+
+            controller2 = renderer.xr.getController(1);
+            userGroup.add(controller2);
+
+            // Optional: Controller Models (visual representation)
+            const controllerModelFactory = new XRControllerModelFactory();
+            const controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+            userGroup.add(controllerGrip1);
+
+            const controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+            userGroup.add(controllerGrip2);
+
+             // Add line for controller 1 pointing direction (optional visualization)
+             const controllerLineMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1) ]); // Line points forward
+             const controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
+             controllerLine.scale.z = 5; // Make line visible
+             controller1.add(controllerLine.clone()); // Add a line to the controller itself
+             // controller2.add(controllerLine.clone()); // If needed for second controller
+
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 1); // Soft white light
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.PointLight(0xffffff, 4, 1000); // Stronger light from sun position
+            // No need to add sunLight to scene if Sun mesh uses MeshBasicMaterial
+            // scene.add(sunLight); // Add only if Sun is MeshStandardMaterial
+
+            // --- Create Solar System ---
+            createSolarSystem();
+
+            // --- Create Starfield ---
+            createStarfield();
+
+            // Window Resize Handler
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function createSolarSystem() {
+            solarSystemData.forEach(data => {
+                const isSun = data.name === 'Sun';
+
+                // Geometry
+                const geometry = new THREE.SphereGeometry(data.radius, 32, 16);
+
+                // Material
+                let material;
+                if (isSun) {
+                    material = new THREE.MeshBasicMaterial({
+                        map: textureLoader.load(data.texture),
+                        emissive: data.emissive, // Make it glow
+                        emissiveIntensity: 1.5,
+                        emissiveMap: textureLoader.load(data.texture) // Use texture for emission color
+                    });
+                } else {
+                    material = new THREE.MeshStandardMaterial({
+                        map: textureLoader.load(data.texture),
+                        roughness: 0.9,
+                        metalness: 0.1
+                    });
+                }
+
+                // Mesh
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.name = data.name; // For potential interaction later
+
+                // Orbit Group (for planets)
+                let orbitGroup = null;
+                if (!isSun) {
+                    orbitGroup = new THREE.Group();
+                    scene.add(orbitGroup); // Orbit groups are centered at the sun (origin)
+
+                    mesh.position.x = data.distance; // Position planet relative to orbit group center
+                    orbitGroup.add(mesh);
+
+                     // --- Create Orbit Path Visualization ---
+                     const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 128);
+                     // Rotate ring to be flat on XZ plane
+                     orbitPathGeometry.rotateX(-Math.PI / 2);
+                     const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.2, transparent: true, side: THREE.DoubleSide });
+                     const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
+                     scene.add(orbitPathMesh); // Add orbit path directly to scene, centered at origin
+                } else {
+                    scene.add(mesh); // Add sun directly to scene
+                }
+
+                // Store for animation
+                planetObjects.push({
+                    mesh: mesh,
+                    orbitGroup: orbitGroup, // null for Sun
+                    speed: data.speed,
+                    distance: data.distance // Store original distance if needed
+                });
+
+                // Special case: Saturn's Rings
+                if (data.name === 'Saturn') {
+                    const ringTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/saturn_ring.png');
+                    ringTexture.rotation = Math.PI / 2; // Align texture if needed
+                    const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 64);
+                     // Rotate ring to be flat relative to planet
+                     ringGeometry.rotateX(Math.PI * 0.45); // Tilt rings slightly like Saturn
+                     ringGeometry.rotateY(Math.PI * 0.1);
+                    const ringMaterial = new THREE.MeshBasicMaterial({
+                        map: ringTexture,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.9
+                     });
+                    const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                    mesh.add(ringMesh); // Add rings as a child of Saturn's mesh
+                }
+            });
+        }
+
+        function createStarfield() {
+            const starGeometry = new THREE.SphereGeometry(500, 64, 32); // Large sphere
+            const starMaterial = new THREE.MeshBasicMaterial({
+                map: textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/starfield.jpg'), // Simple star texture
+                side: THREE.BackSide // Render material on the inside
+            });
+            const starField = new THREE.Mesh(starGeometry, starMaterial);
+            scene.add(starField);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function handleControllerInput(controller, delta) {
+            if (controller.userData.gamepad) { // Check if gamepad data is available
+                const gamepad = controller.userData.gamepad;
+
+                // Simple Thumbstick/Touchpad Forward/Backward Movement (usually axes 2 & 3)
+                if (gamepad.axes.length >= 4) {
+                    const moveZ = gamepad.axes[3]; // Typically vertical axis on right thumbstick/touchpad
+
+                    if (Math.abs(moveZ) > 0.1) { // Deadzone check
+                        const moveDirection = new THREE.Vector3(0, 0, -1); // Base direction (forward)
+                        // Transform direction by controller's orientation
+                        moveDirection.applyQuaternion(controller.quaternion);
+                        // Optional: Project onto XZ plane if you don't want vertical movement
+                        // moveDirection.y = 0;
+                        // moveDirection.normalize();
+
+                        userGroup.position.addScaledVector(moveDirection, -moveZ * movementSpeed * delta);
+                    }
+                    // Could add turning with horizontal axis (e.g., gamepad.axes[2]) here if desired
+                }
+            }
+        }
+
+
+        function animate() {
+            renderer.setAnimationLoop(() => {
+                const delta = clock.getDelta(); // Time since last frame
+
+                // --- Update Planet Orbits ---
+                planetObjects.forEach(obj => {
+                    if (obj.orbitGroup) { // Only rotate if it has an orbit group (i.e., not the Sun)
+                        obj.orbitGroup.rotation.y += obj.speed * delta * 5; // Adjust multiplier for visual speed
+                    }
+                    // Optional: Add self-rotation
+                    obj.mesh.rotation.y += 0.1 * delta; // All planets rotate at same slow speed for simplicity
+                });
+
+
+                 // --- Handle VR Controller Input for Movement ---
+                 if (renderer.xr.isPresenting) {
+                     // Check which controller is primary (often the right one, index 0 or 1)
+                     // We'll assume controller1 (index 0) is the primary for movement for simplicity
+                     // A more robust solution might check handedness or allow user selection.
+                     const primaryController = controller1; // Adjust if needed (e.g., check handedness)
+
+                     // Check if controller is connected and has gamepad data
+                     if (primaryController && primaryController.userData.gamepad) {
+                          handleControllerInput(primaryController, delta);
+                     } else if (controller2 && controller2.userData.gamepad) {
+                         // Fallback to controller 2 if 1 doesn't have gamepad data (less common)
+                         handleControllerInput(controller2, delta);
+                     }
+
+                     // Update controller connection status and gamepad data (important!)
+                     const session = renderer.xr.getSession();
+                     if (session && session.inputSources) {
+                         session.inputSources.forEach((source, index) => {
+                             const targetController = (index === 0) ? controller1 : controller2;
+                             if (targetController && source.gamepad) {
+                                 targetController.userData.gamepad = source.gamepad; // Update gamepad reference
+                             } else if (targetController) {
+                                 targetController.userData.gamepad = null; // Clear if no gamepad
+                             }
+                         });
+                     }
+                 }
+
+
+                // Render Scene
+                renderer.render(scene, camera);
+            });
+        }
+
+    </script>
+</body>
+</html>
