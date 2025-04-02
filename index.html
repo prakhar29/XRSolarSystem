@@ -169,26 +169,27 @@
              const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
              const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]); // Line points forward, make it longer
              controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
-             // controllerLine.scale.z = 10; // Scale removed, adjusted geometry instead
              controller1.add(controllerLine); // Add line to the controller
 
              // Raycaster
              raycaster = new THREE.Raycaster();
 
-            // Lighting
-            // Increased Ambient Light intensity for better visibility without textures
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Brighter ambient light
+            // --- Lighting (Optimized) ---
+            // Use only AmbientLight for performance. Increase intensity.
+            const ambientLight = new THREE.AmbientLight(
+                0xffffff, // White light
+                1.5       // << INCREASED INTENSITY
+            );
             scene.add(ambientLight);
 
-            // Add Point Light at the Sun's position
-            const sunLight = new THREE.PointLight(0xffffff, 3, 2000); // Intensity 3, range 2000
-            scene.add(sunLight); // Sun itself is basic material, but light affects planets
+            // --- POINT LIGHT REMOVED ---
+            // (No PointLight code here)
 
             // --- Create Solar System ---
-            createSolarSystem();
+            createSolarSystem(); // Call the function to create planets etc.
 
             // --- Create Starfield ---
-            createStarfield();
+            createStarfield(); // Call the function to create the background
 
             // --- Create UI Panel Object ---
             infoPanelDiv = document.getElementById('infoPanel');
@@ -200,7 +201,7 @@
 
             window.addEventListener('resize', onWindowResize, false);
         }
-
+        
         function createSolarSystem() {
             solarSystemData.forEach(data => {
                 const isSun = data.name === 'Sun';
