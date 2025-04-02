@@ -14,7 +14,7 @@
          #VRButton:hover { background-color: #3b3; }
          #VRButton:disabled { background-color: #555; cursor: not-allowed; }
 
-         /* Styling for the 2D Info Panel */
+         /* Styling for the 2D Info Panel (Keep styles, but element won't be used yet) */
          #infoPanel {
             position: absolute; /* Needed for CSS2DRenderer */
             background-color: rgba(0, 20, 40, 0.85);
@@ -32,13 +32,8 @@
          }
          #infoPanel h3 { margin-top: 0; color: #0af; }
          #infoPanel p { margin-bottom: 5px; }
-         #infoPanel .close-button { /* Basic styling for a potential close button if needed */
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            color: #aaa;
+         #infoPanel .close-button {
+            position: absolute; top: 5px; right: 5px; cursor: pointer; font-weight: bold; color: #aaa;
          }
          #infoPanel .close-button:hover { color: #fff; }
 
@@ -46,14 +41,14 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.13<br/>
+        WebXR Solar System Explorer V0.14<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
 
-     <!-- Div for the 2D Info Panel -->
+     <!-- Div for the 2D Info Panel (Keep div, but object creation is commented out) -->
      <div id="infoPanel">
-        <span id="closeInfoPanel" class="close-button" style="display: none;">[X]</span> <!-- Example close button, functionality not fully added -->
+        <span id="closeInfoPanel" class="close-button" style="display: none;">[X]</span>
         <h3 id="panelTitle">Planet Name</h3>
         <p id="panelFact1">Fact 1</p>
         <p id="panelFact2">Fact 2</p>
@@ -74,14 +69,14 @@
     <script type="module">
         import * as THREE from 'three';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'; // Import CSS2D
+        // import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Keep commented out
+        // import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'; // Keep commented out
 
         // --- Basic Setup ---
         let scene, camera, renderer, clock;
         let vrButton;
         let userGroup;
-        let controller1, controller2, controllerGrip1, controllerGrip2;
+        let controller1, controller2; // Removed controllerGrip vars as models are removed
         let controllerLine; // Reference to the line on controller1
         const movementSpeed = 2.0;
 
@@ -91,14 +86,13 @@
         const highlightColor = new THREE.Color(0x00ff00); // Green highlight
         const defaultLineColor = new THREE.Color(0xffffff); // White default
 
-        // --- 2D UI ---
-        let css2DRenderer;
-        let infoPanelDiv;
-        let infoPanelObject;
-        let selectedPlanet = null; // Track the currently selected planet for UI
+        // --- 2D UI (Keep vars, but objects/renderer not created) ---
+        // let css2DRenderer;
+        let infoPanelDiv; // Keep reference to the div element
+        // let infoPanelObject;
+        let selectedPlanet = null; // Keep track of selected planet
 
         // --- Solar System Data ---
-        // Added color and basic facts. Removed texture URLs.
         const solarSystemData = [
             { name: 'Sun', radius: 5, distance: 0, speed: 0, color: 0xffd700, emissive: 0xffd700, facts: ["Star", "Center of Solar System", "Surface Temp: ~5,500 °C"] },
             { name: 'Mercury', radius: 0.5, distance: 15, speed: 0.047, color: 0xaaaaaa, facts: ["Smallest Planet", "Shortest Orbit (88 days)", "Extreme Temperatures"] },
@@ -106,7 +100,7 @@
             { name: 'Earth', radius: 1, distance: 30, speed: 0.029, color: 0x4682b4, facts: ["Our Home", "Only Known Life", "Liquid Water Surface"] },
             { name: 'Mars', radius: 0.7, distance: 40, speed: 0.024, color: 0xff4500, facts: ["The Red Planet", "Olympus Mons (Volcano)", "Thin Atmosphere"] },
             { name: 'Jupiter', radius: 3.5, distance: 65, speed: 0.013, color: 0xffa500, facts: ["Largest Planet", "Great Red Spot (Storm)", "Gas Giant"] },
-            { name: 'Saturn', radius: 3, distance: 90, speed: 0.009, color: 0xf4a460, facts: ["Ringed Planet", "Least Dense Planet", "Gas Giant"] }, // Ring added separately
+            { name: 'Saturn', radius: 3, distance: 90, speed: 0.009, color: 0xf4a460, facts: ["Ringed Planet", "Least Dense Planet", "Gas Giant"] },
             { name: 'Uranus', radius: 2, distance: 115, speed: 0.006, color: 0xadd8e6, facts: ["Ice Giant", "Tilted Axis", "Faint Rings"] },
             { name: 'Neptune', radius: 1.9, distance: 140, speed: 0.005, color: 0x00008b, facts: ["Ice Giant", "Strongest Winds", "Great Dark Spot (Variable)"] }
         ];
@@ -114,8 +108,7 @@
         const planetObjects = []; // Stores { mesh, orbitGroup, speed, distance, data }
         const selectablePlanets = []; // Stores just the planet meshes for raycasting
 
-        init();
-        animate();
+        // --- Function Definitions ---
 
         function init() {
             scene = new THREE.Scene();
@@ -182,34 +175,23 @@
             createStarfield(); // Keep uncommented
 
             // --- REMOVED UI PANEL OBJECT CREATION ---
+            infoPanelDiv = document.getElementById('infoPanel'); // Still get reference to div if needed later
             /*
-            infoPanelDiv = document.getElementById('infoPanel');
             infoPanelObject = new CSS2DObject(infoPanelDiv);
             infoPanelObject.position.set(0, 0, 0);
             scene.add(infoPanelObject);
             */
 
             window.addEventListener('resize', onWindowResize, false); // Keep resize
-        }    
-        
+        } // End of init function
+
         function createSolarSystem() {
             solarSystemData.forEach(data => {
                 const isSun = data.name === 'Sun';
-                // --- OPTIMIZATION: Reduce Sphere Segments ---
-                const geometry = new THREE.SphereGeometry(
-                    data.radius,
-                    12, // Reduced width segments (from 32)
-                    6  // Reduced height segments (from 16)
-                 );
-
-                let material;
-                // --- OPTIMIZATION: Use MeshBasicMaterial for planets ---
-                material = new THREE.MeshBasicMaterial({
-                    color: data.color,
-                    // No lighting calculations needed for BasicMaterial
-                });
-                // We no longer need the distinction between Sun and Planet material types
-                // as both will be MeshBasicMaterial.
+                // Optimized Sphere Geometry
+                const geometry = new THREE.SphereGeometry(data.radius, 24, 12);
+                // Optimized Basic Material
+                const material = new THREE.MeshBasicMaterial({ color: data.color });
 
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.name = data.name;
@@ -222,93 +204,65 @@
                     mesh.position.x = data.distance;
                     orbitGroup.add(mesh);
 
-                     // --- OPTIMIZATION: Reduce Orbit Ring Segments ---
-                     const orbitPathGeometry = new THREE.RingGeometry(
-                         data.distance - 0.1,
-                         data.distance + 0.1,
-                         64 // Reduced segments (from 128)
-                     );
+                     // Optimized Orbit Ring Geometry
+                     const orbitPathGeometry = new THREE.RingGeometry(data.distance - 0.1, data.distance + 0.1, 64);
                      orbitPathGeometry.rotateX(-Math.PI / 2);
                      const orbitPathMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.15, transparent: true, side: THREE.DoubleSide });
                      const orbitPathMesh = new THREE.Mesh(orbitPathGeometry, orbitPathMaterial);
                      scene.add(orbitPathMesh);
 
                     selectablePlanets.push(mesh);
-
                 } else {
                     scene.add(mesh); // Add sun directly
                 }
 
                 planetObjects.push({
-                    mesh: mesh,
-                    orbitGroup: orbitGroup,
-                    speed: data.speed,
-                    distance: data.distance,
-                    data: data
+                    mesh: mesh, orbitGroup: orbitGroup, speed: data.speed, distance: data.distance, data: data
                 });
 
-                // Special case: Saturn's Rings (already BasicMaterial, reduce geometry)
+                // Special case: Saturn's Rings (Optimized Geometry)
                 if (data.name === 'Saturn') {
-                     // --- OPTIMIZATION: Reduce Ring Segments ---
-                    const ringGeometry = new THREE.RingGeometry(
-                        data.radius * 1.2,
-                        data.radius * 2.2,
-                        32 // Reduced segments (from 64)
-                     );
-                    ringGeometry.rotateX(Math.PI * 0.45);
-                    ringGeometry.rotateY(Math.PI * 0.1);
-                    const ringMaterial = new THREE.MeshBasicMaterial({
-                        color: 0xcccccc,
-                        side: THREE.DoubleSide,
-                        transparent: true,
-                        opacity: 0.6
-                     });
+                    const ringGeometry = new THREE.RingGeometry(data.radius * 1.2, data.radius * 2.2, 32);
+                    ringGeometry.rotateX(Math.PI * 0.45); ringGeometry.rotateY(Math.PI * 0.1);
+                    const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
                     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
                     mesh.add(ringMesh);
                 }
             });
-        }
-        function createStarfield() {
-            // --- OPTIMIZATION: Reduce Star Count ---
-            const numStars = 5000; // Reduced from 10000
-            const starRadius = 500;
+        } // End of createSolarSystem
 
+        function createStarfield() {
+            // Optimized Star Count
+            const numStars = 5000;
+            const starRadius = 500;
             const starVertices = [];
             for (let i = 0; i < numStars; i++) {
-                const u = Math.random();
-                const v = Math.random();
-                const theta = 2 * Math.PI * u;
-                const phi = Math.acos(2 * v - 1);
+                const u = Math.random(); const v = Math.random();
+                const theta = 2 * Math.PI * u; const phi = Math.acos(2 * v - 1);
                 const x = starRadius * Math.sin(phi) * Math.cos(theta);
                 const y = starRadius * Math.sin(phi) * Math.sin(theta);
                 const z = starRadius * Math.cos(phi);
                 starVertices.push(x, y, z);
             }
-
             const starGeometry = new THREE.BufferGeometry();
             starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-
             const starMaterial = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 0.7, // Keep size for visibility
-                sizeAttenuation: true,
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
+                color: 0xffffff, size: 0.7, sizeAttenuation: true,
+                transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
             });
-
             const starField = new THREE.Points(starGeometry, starMaterial);
             scene.add(starField);
-        }
-        
+        } // End of createStarfield
+
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            css2DRenderer.setSize(window.innerWidth, window.innerHeight); // Resize CSS2D renderer too
-        }
+            // No need to resize css2DRenderer as it's not created
+        } // End of onWindowResize
 
         function handleControllerInput(controller, delta) {
+            // Basic movement logic (no changes needed here)
             if (controller.userData.gamepad) {
                 const gamepad = controller.userData.gamepad;
                 if (gamepad.axes.length >= 4) {
@@ -322,68 +276,47 @@
                     }
                 }
             }
-        }
+        } // End of handleControllerInput
 
         function updateInteractions() {
+            // Raycasting logic (no changes needed here)
             intersectedObject = null; // Reset intersection
-            if (renderer.xr.isPresenting && controller1) {
-                // Use controller's matrix world for raycasting
+            // Check controller1 exists before using it
+            if (renderer.xr.isPresenting && controller1 && controllerLine) {
                 const controllerMatrix = controller1.matrixWorld;
                 const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerMatrix.getPosition(new THREE.Vector3()));
-
                 raycaster.set(controllerMatrix.getPosition(new THREE.Vector3()), rayDirection.normalize());
-
-                const intersects = raycaster.intersectObjects(selectablePlanets, false); // Intersect only planet meshes
+                const intersects = raycaster.intersectObjects(selectablePlanets, false);
 
                 if (intersects.length > 0) {
-                    // Check if the intersection is different from the last frame
-                    if (intersectedObject !== intersects[0].object) {
-                       intersectedObject = intersects[0].object;
-                    }
-                     // Highlight: Change controller line color
+                    intersectedObject = intersects[0].object;
                     controllerLine.material.color.set(highlightColor);
-
                 } else {
-                     // No intersection: Reset line color
                      controllerLine.material.color.set(defaultLineColor);
                 }
-            } else {
-                 // Not presenting or no controller, reset line color
-                 if(controllerLine) controllerLine.material.color.set(defaultLineColor);
+            } else if (controllerLine) { // Reset color if not presenting or no controller
+                 controllerLine.material.color.set(defaultLineColor);
             }
-        }
-
+        } // End of updateInteractions
 
         function onSelectStart() {
              // Triggered by controller button press
+             // Only log for now, no UI manipulation
              if (intersectedObject) {
-                 selectedPlanet = intersectedObject; // Mark this planet as selected
-                 const data = selectedPlanet.userData; // Get the data stored on the mesh
-
-                 // Update the HTML panel content
-                 document.getElementById('panelTitle').textContent = data.name;
-                 document.getElementById('panelFact1').textContent = data.facts[0] || '';
-                 document.getElementById('panelFact2').textContent = data.facts[1] || '';
-                 document.getElementById('panelFact3').textContent = data.facts[2] || '';
-
-                 // Position the panel slightly above the selected planet
-                 const planetPosition = selectedPlanet.getWorldPosition(new THREE.Vector3());
-                 const offset = new THREE.Vector3(0, selectedPlanet.geometry.parameters.radius + 1.5, 0); // Offset Y based on planet radius + margin
-                 infoPanelObject.position.copy(planetPosition).add(offset);
-
-                 // Make the panel visible
-                 infoPanelDiv.style.display = 'block';
+                 console.log("Selected:", intersectedObject.name);
+                 selectedPlanet = intersectedObject; // Keep track of selection
+                 // NO UI panel manipulation here yet
              } else {
-                 // Clicked in empty space, hide the panel
+                 console.log("Selected empty space");
                  selectedPlanet = null;
-                 infoPanelDiv.style.display = 'none';
+                 // NO UI panel manipulation here yet
              }
-         }
+         } // End of onSelectStart
 
          function onSelectEnd() {
-            // Optional: Hide panel on trigger release? Or keep it until another selection?
-            // For now, we'll leave it visible until another selection or empty space click.
-         }
+            // Optional: Could add logic here if needed on release
+            // console.log("Select end");
+         } // End of onSelectEnd
 
         function animate() {
             renderer.setAnimationLoop(() => { // Arrow function for loop starts
@@ -442,14 +375,10 @@
             }); // End of setAnimationLoop callback
         } // End of animate function
 
-                // Render Scene (Keep)
-                renderer.render(scene, camera);
+        // --- Start the experience ---
+        init();
+        animate();
 
-                // --- REMOVED CSS2D RENDER CALL ---
-                // css2DRenderer.render(scene, camera); // Keep commented out
-            });
-        }
-        
-    </script>
+    </script> // End of module script
 </body>
 </html>
