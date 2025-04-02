@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.6<br/>
+        WebXR Solar System Explorer V0.7<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -124,7 +124,7 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
             renderer = new THREE.WebGLRenderer({
-                 antialias: true // Keep basic AA for now, disable if still slow
+                 antialias: false // Keep basic AA for now, disable if still slow
             });
             // --- OPTIMIZATION: Cap Pixel Ratio ---
             renderer.setPixelRatio( Math.min(window.devicePixelRatio, 1.5) ); // Cap at 1.5x native res
@@ -207,8 +207,8 @@
                 // --- OPTIMIZATION: Reduce Sphere Segments ---
                 const geometry = new THREE.SphereGeometry(
                     data.radius,
-                    24, // Reduced width segments (from 32)
-                    12  // Reduced height segments (from 16)
+                    12, // Reduced width segments (from 32)
+                    6  // Reduced height segments (from 16)
                  );
 
                 let material;
@@ -279,7 +279,7 @@
         }
         function createStarfield() {
             // --- OPTIMIZATION: Reduce Star Count ---
-            const numStars = 5000; // Reduced from 10000
+            const numStars = 500; // Reduced from 10000
             const starRadius = 500;
 
             const starVertices = [];
