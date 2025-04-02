@@ -41,7 +41,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.17<br/>
+        WebXR Solar System Explorer V0.18<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -278,36 +278,39 @@
             }
         } // End of handleControllerInput
 
-        function updateInteractions() {
-            intersectedObject = null; // Reset intersection
+    function updateInteractions() {
+        intersectedObject = null; // Reset intersection
 
-            // Ensure controller, line, and raycaster are ready before proceeding
-            if (renderer.xr.isPresenting && controller1 && controllerLine && raycaster) {
-                const controllerMatrix = controller1.matrixWorld;
-                // It's slightly more optimal to reuse vectors if you create them outside the loop,
-                // but for this scale, creating them here is likely fine.
-                const controllerPosition = controllerMatrix.getPosition(new THREE.Vector3());
-                const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerPosition).normalize();
+        // Ensure controller, line, and raycaster are ready before proceeding
+        if (renderer.xr.isPresenting && controller1 && controllerLine && raycaster) {
+            const controllerMatrix = controller1.matrixWorld;
+            const controllerPosition = controllerMatrix.getPosition(new THREE.Vector3());
+            const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(controllerMatrix).sub(controllerPosition).normalize();
 
-                raycaster.set(controllerPosition, rayDirection);
+            raycaster.set(controllerPosition, rayDirection);
 
-                // --- RE-ENABLE INTERSECTION TEST ---
-                const intersects = raycaster.intersectObjects(selectablePlanets, false);
+            // --- KEEP INTERSECTION TEST DISABLED FOR THIS TEST ---
+            /*
+            const intersects = raycaster.intersectObjects(selectablePlanets, false);
 
-                if (intersects.length > 0) {
-                    // Found intersection
-                    intersectedObject = intersects[0].object;
-                    controllerLine.material.color.set(highlightColor);
-                } else {
-                    // No intersection
-                     controllerLine.material.color.set(defaultLineColor);
-                }
-            } else if (controllerLine) {
-                 // Ensure line color is default if not in VR or controller isn't ready
+            if (intersects.length > 0) {
+                intersectedObject = intersects[0].object;
+                controllerLine.material.color.set(highlightColor);
+            } else {
                  controllerLine.material.color.set(defaultLineColor);
             }
-        } // End of updateInteractions
+            */
 
+            // Force line color to default for this test
+            controllerLine.material.color.set(defaultLineColor);
+
+
+        } else if (controllerLine) {
+             // Ensure line color is default if not in VR or controller isn't ready
+             controllerLine.material.color.set(defaultLineColor);
+        }
+    } // End of updateInteractions
+        
         function onSelectStart() {
              // Triggered by controller button press
              // Only log for now, no UI manipulation
