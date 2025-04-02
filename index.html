@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.4<br/> {/* <-- Version added here */}
+        WebXR Solar System Explorer V0.5<br/> {/* <-- Version added here */}
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -274,24 +274,41 @@
         }
 
         function createStarfield() {
-            const starTextureUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/starfield.jpg'; // Example texture
-             try {
-                 const starTexture = new THREE.TextureLoader().load(starTextureUrl);
-                 const starGeometry = new THREE.SphereGeometry(500, 64, 32);
-                 const starMaterial = new THREE.MeshBasicMaterial({
-                     map: starTexture,
-                     side: THREE.BackSide, // Render material on the inside
-                     fog: false // Ensure stars aren't affected by scene fog if added later
-                 });
-                 const starField = new THREE.Mesh(starGeometry, starMaterial);
-                 scene.add(starField);
-             } catch (error) {
-                 console.error("Failed to load starfield texture:", error);
-                 // Optional: Add a fallback solid color background?
-                 // scene.background = new THREE.Color(0x050510);
-             }
-        }
+            const numStars = 10000; // Adjust count as needed for density/performance
+            const starRadius = 500; // How far out the stars are placed
 
+            const starVertices = [];
+            for (let i = 0; i < numStars; i++) {
+                // Create random points on the surface of a sphere
+                const u = Math.random();
+                const v = Math.random();
+                const theta = 2 * Math.PI * u; // Azimuthal angle
+                const phi = Math.acos(2 * v - 1); // Polar angle
+
+                // Convert spherical to Cartesian coordinates
+                const x = starRadius * Math.sin(phi) * Math.cos(theta);
+                const y = starRadius * Math.sin(phi) * Math.sin(theta);
+                const z = starRadius * Math.cos(phi);
+
+                starVertices.push(x, y, z);
+            }
+
+            const starGeometry = new THREE.BufferGeometry();
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,      // White stars
+                size: 0.7,            // Adjust size of stars (in pixels)
+                sizeAttenuation: true, // Stars farther away appear smaller
+                transparent: true,    // Needed for blending
+                blending: THREE.AdditiveBlending, // Creates a glow effect where stars overlap
+                depthWrite: false     // Helps with blending transparency
+            });
+
+            const starField = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starField);
+        }
+        
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
