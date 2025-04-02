@@ -46,7 +46,7 @@
 </head>
 <body>
     <div id="info">
-        WebXR Solar System Explorer V0.7<br/>
+        WebXR Solar System Explorer V0.8<br/>
         Point controller & Press Trigger/Select on a planet for info. Thumbstick to move.
     </div>
      <div id="vr-button-container"></div>
@@ -119,86 +119,77 @@
 
         function init() {
             scene = new THREE.Scene();
-            clock = new THREE.Clock();
+            clock = new THREE.Clock(); // Keep clock for movement delta
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+            // Use minimal renderer settings
             renderer = new THREE.WebGLRenderer({
-                 antialias: false // Keep basic AA for now, disable if still slow
+                 antialias: false // AA Disabled
             });
-            // --- OPTIMIZATION: Cap Pixel Ratio ---
-            renderer.setPixelRatio( Math.min(window.devicePixelRatio, 1.5) ); // Cap at 1.5x native res
+            renderer.setPixelRatio( 1 ); // Force 1.0 pixel ratio (simplest)
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // --- 2D Renderer Setup ---
+            // --- REMOVED CSS2D RENDERER SETUP ---
+            /*
             css2DRenderer = new CSS2DRenderer();
             css2DRenderer.setSize(window.innerWidth, window.innerHeight);
             css2DRenderer.domElement.style.position = 'absolute';
             css2DRenderer.domElement.style.top = '0px';
             css2DRenderer.domElement.style.pointerEvents = 'none';
             document.body.appendChild(css2DRenderer.domElement);
+            */
 
-            // User Group
+            // User Group (Keep for movement)
             userGroup = new THREE.Group();
             userGroup.position.set(0, 5, 45);
             userGroup.add(camera);
             scene.add(userGroup);
 
-            // VR Button
+            // VR Button (Keep)
             vrButton = VRButton.createButton(renderer);
             document.getElementById('vr-button-container').appendChild(vrButton);
 
-            // Controllers
+            // Controllers (Setup for movement ONLY, no models, no select events)
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart);
-            controller1.addEventListener('selectend', onSelectEnd);
+            // controller1.addEventListener('selectstart', onSelectStart); // REMOVED
+            // controller1.addEventListener('selectend', onSelectEnd); // REMOVED
             userGroup.add(controller1);
 
             controller2 = renderer.xr.getController(1);
             userGroup.add(controller2);
 
-            // --- OPTIMIZATION: Remove Controller Models ---
-            /*
-            const controllerModelFactory = new XRControllerModelFactory();
-            controllerGrip1 = renderer.xr.getControllerGrip(0);
-            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-            userGroup.add(controllerGrip1);
-
-            controllerGrip2 = renderer.xr.getControllerGrip(1);
-            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-            userGroup.add(controllerGrip2);
+            // --- REMOVED CONTROLLER MODELS ---
+            // --- REMOVED CONTROLLER LINE / RAYCASTER ---
+             /*
+             const controllerLineMat = new THREE.LineBasicMaterial({...});
+             const controllerLineGeom = new THREE.BufferGeometry()...;
+             controllerLine = new THREE.Line(...);
+             controller1.add(controllerLine);
+             raycaster = new THREE.Raycaster();
             */
 
-             // Controller Line for Pointing/Raycasting (Keep this)
-             const controllerLineMat = new THREE.LineBasicMaterial({ color: defaultLineColor, linewidth: 2 });
-             // Use a simpler geometry just in case
-             const controllerLineGeom = new THREE.BufferGeometry().setFromPoints([ new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -10) ]);
-             controllerLine = new THREE.Line(controllerLineGeom, controllerLineMat);
-             controller1.add(controllerLine);
-
-             // Raycaster
-             raycaster = new THREE.Raycaster();
-
-            // --- Lighting (Optimized) ---
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5 );
+            // --- Lighting (Keep minimal) ---
+            const ambientLight = new THREE.AmbientLight( 0xffffff, 1.5 );
             scene.add(ambientLight);
 
-            // --- Create Solar System ---
-            createSolarSystem(); // Call the function to create planets etc.
+            // --- REMOVED SOLAR SYSTEM CREATION CALL ---
+            // createSolarSystem();
 
-            // --- Create Starfield ---
-            createStarfield(); // Call the function to create the background
+            // --- REMOVED STARFIELD CREATION CALL ---
+            // createStarfield();
 
-            // --- Create UI Panel Object ---
+            // --- REMOVED UI PANEL OBJECT CREATION ---
+            /*
             infoPanelDiv = document.getElementById('infoPanel');
             infoPanelObject = new CSS2DObject(infoPanelDiv);
             infoPanelObject.position.set(0, 0, 0);
             scene.add(infoPanelObject);
+            */
 
-
-            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('resize', onWindowResize, false); // Keep resize
         }
         
         function createSolarSystem() {
@@ -394,53 +385,52 @@
             // For now, we'll leave it visible until another selection or empty space click.
          }
 
-        function animate() {
+                function animate() {
             renderer.setAnimationLoop(() => {
-                const delta = clock.getDelta();
+                const delta = clock.getDelta(); // Keep for movement
 
-                // Update Planet Orbits
+                // --- REMOVED PLANET ORBIT LOOP ---
+                /*
                 planetObjects.forEach(obj => {
-                    if (obj.orbitGroup) {
-                        obj.orbitGroup.rotation.y += obj.speed * delta * 5;
-                    }
-                    obj.mesh.rotation.y += 0.1 * delta;
+                    // ... orbit/rotation code ...
                 });
+                */
 
-                 // Handle VR Controller Input for Movement & Interactions
+                 // Handle VR Controller Input for Movement (Keep basic movement)
                  if (renderer.xr.isPresenting) {
                      const session = renderer.xr.getSession();
                      if (session && session.inputSources) {
-                          let primaryController = null; // Find the controller with gamepad first for movement
+                          let primaryController = null;
                           session.inputSources.forEach((source, index) => {
                               const targetController = (index === 0) ? controller1 : controller2;
                               if (targetController) {
                                   targetController.userData.gamepad = source.gamepad || null;
-                                  if (source.gamepad && !primaryController) primaryController = targetController; // Assign first controller with gamepad
+                                  if (source.gamepad && !primaryController) primaryController = targetController;
                               }
                           });
-                           // Use primary (gamepad) controller for movement, default to controller2 if needed
                            const moveController = primaryController || controller2;
-                           if (moveController) handleControllerInput(moveController, delta);
+                           if (moveController) handleControllerInput(moveController, delta); // Keep movement call
                      }
-                     // Handle pointing and selection with controller1 specifically
-                     updateInteractions();
 
-                     // Make the info panel always face the camera if visible
+                     // --- REMOVED INTERACTION UPDATES ---
+                     // updateInteractions();
+
+                     // --- REMOVED UI PANEL POSITIONING ---
+                     /*
                      if (selectedPlanet && infoPanelDiv.style.display === 'block') {
-                         // Optional: Keep panel facing user. CSS2DObject does this reasonably well by default.
-                         // You could force it more strictly if needed:
-                         // infoPanelObject.lookAt(camera.getWorldPosition(new THREE.Vector3()));
+                         // ... panel positioning ...
                      }
-
+                     */
                  }
 
-                // Render Scene
+                // Render Scene (Keep)
                 renderer.render(scene, camera);
-                // Render CSS2D Overlay
-                css2DRenderer.render(scene, camera);
+
+                // --- REMOVED CSS2D RENDER CALL ---
+                // css2DRenderer.render(scene, camera);
             });
         }
-
+        
     </script>
 </body>
 </html>
